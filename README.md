@@ -1,7 +1,36 @@
-# omnibrain_DSML_intern_grp19
-Bypassing the hallucination risks of standard LLMs
+# OmniBrain
 
-Agentic Multi-Modal RAG Orchestrator
+OmniBrain is an enterprise-style Agentic Multi-Modal RAG Orchestrator. This repository currently contains the production-ready scaffold only: package boundaries, starter entrypoints, container wiring, and integration placeholders for later implementation.
+
+## Top-Level Layout
+
+- `omnibrain/app/` - FastAPI backend, API wiring, core config, services, models, schemas, and utilities.
+- `omnibrain/agents/` - LangGraph-style orchestration placeholders for supervisor, search, vision, SQL, memory, state, nodes, tools, and prompts.
+- `omnibrain/vectorstore/` - Qdrant client wrapper and retrieval scaffolding for text chunks and image embeddings.
+- `frontend/streamlit/` - Streamlit chat UI placeholder for query and citation display.
+- `evaluation/langfuse/` - Observability and evaluation placeholders.
+- `guardrails/` - NeMo Guardrails configuration placeholders.
+- `data/` - Upload, extraction, chunking, and image storage locations.
+- `scripts/` - Prototype and utility scripts.
+- `tests/` - Future automated tests.
+- `docker/` - Docker support files and deployment helpers.
+- `docs/` - Project documentation.
+
+## Included Starter Components
+
+- FastAPI application with a `/health` route.
+- Streamlit chat-style placeholder UI.
+- Environment-backed application settings.
+- Placeholder Qdrant integration layer.
+- Placeholder agent modules for multi-agent routing.
+- Docker and Docker Compose support for FastAPI, Streamlit, and Qdrant.
+
+## Quick Start
+
+1. Copy `.env.example` to `.env` and fill in the required values.
+2. Install dependencies with `uv`, Poetry, or `pip` using `pyproject.toml` or `requirements.txt`.
+3. Run the backend with `uvicorn omnibrain.app.main:app --reload`.
+4. Run the Streamlit UI with `streamlit run frontend/streamlit/app.py`.
 
 ## Team Members
 
@@ -11,17 +40,3 @@ Agentic Multi-Modal RAG Orchestrator
 - Manav
 - Abhilash
 - Meerja
-
-## Initial understanding
-
-- Why build another one
-The reason is usually not “because no tool exists,” but because existing tools are often fragmented, generic, or not suited for a specific workflow. A new system becomes useful when it connects multiple tools into one coordinated pipeline, especially for tasks that need routing, reasoning, and combining results from different sources.
-
-- What existing tools miss
-Most tool directories are collections of separate utilities, not an orchestrated system that decides which tool to use, in what order, and how to merge the outputs. That matters when a problem needs several steps, like extracting tables, reading charts, querying text, and then producing one cited answer.
-
-Why this approach still matters
-In your OmniBrain-style setup, the value is not “another calculator” or “another parser.” The value is the supervisor layer that can coordinate specialized agents and reduce hallucinations by using the right retrieval method for each part of the document.
-
-- Simple example
-A normal tool site might give you one PDF converter, one chart reader, and one search box. An orchestrator can take a 500-page report, send tables to one agent, text to another, and stock history to a third, then synthesize a final memo automatically.

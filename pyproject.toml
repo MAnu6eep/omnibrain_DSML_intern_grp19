@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "omnibrain"
+version = "0.1.0"
+description = "OmniBrain Agentic Multi-Modal RAG Orchestrator"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi>=0.115,<1.0",
+  "uvicorn[standard]>=0.30,<1.0",
+  "streamlit>=1.36,<2.0",
+  "qdrant-client>=1.10,<2.0",
+  "pydantic>=2.7,<3.0",
+  "pydantic-settings>=2.3,<3.0",
+  "langgraph>=0.2,<1.0",
+  "langchain>=0.2,<1.0",
+  "python-dotenv>=1.0,<2.0",
+]
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["omnibrain*"]
