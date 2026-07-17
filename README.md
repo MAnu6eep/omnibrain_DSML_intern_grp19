@@ -40,3 +40,9 @@ OmniBrain is an enterprise-style Agentic Multi-Modal RAG Orchestrator. This repo
 - Manav
 - Abhilash
 - Meerja
+## Backend Setup
+
+Run the backend server locally using:
+
+```bash
+uvicorn apps.main:app --reload
