@@ -1,0 +1,45 @@
+Providedproperattributionisprovided,Googleherebygrantspermissionto
+reproducethetablesandfiguresinthispapersolelyforuseinjournalisticor
+scholarlyworks.
+Attention Is All You Need
+AshishVaswani∗ NoamShazeer∗ NikiParmar∗ JakobUszkoreit∗
+GoogleBrain GoogleBrain GoogleResearch GoogleResearch
+avaswani@google.com noam@google.com nikip@google.com usz@google.com
+LlionJones∗ AidanN.Gomez∗ † ŁukaszKaiser∗
+GoogleResearch UniversityofToronto GoogleBrain
+llion@google.com aidan@cs.toronto.edu lukaszkaiser@google.com
+IlliaPolosukhin∗ ‡
+illia.polosukhin@gmail.com
+Abstract
+Thedominantsequencetransductionmodelsarebasedoncomplexrecurrentor
+convolutionalneuralnetworksthatincludeanencoderandadecoder. Thebest
+performing models also connect the encoder and decoder through an attention
+mechanism. We propose a new simple network architecture, the Transformer,
+basedsolelyonattentionmechanisms,dispensingwithrecurrenceandconvolutions
+entirely. Experiments on two machine translation tasks show these models to
+besuperiorinqualitywhilebeingmoreparallelizableandrequiringsignificantly
+less time to train. Our model achieves 28.4 BLEU on the WMT 2014 English-
+to-German translation task, improving over the existing best results, including
+ensembles,byover2BLEU.OntheWMT2014English-to-Frenchtranslationtask,
+ourmodelestablishesanewsingle-modelstate-of-the-artBLEUscoreof41.8after
+trainingfor3.5daysoneightGPUs,asmallfractionofthetrainingcostsofthe
+bestmodelsfromtheliterature. WeshowthattheTransformergeneralizeswellto
+othertasksbyapplyingitsuccessfullytoEnglishconstituencyparsingbothwith
+largeandlimitedtrainingdata.
+∗Equalcontribution.Listingorderisrandom.JakobproposedreplacingRNNswithself-attentionandstarted
+theefforttoevaluatethisidea.Ashish,withIllia,designedandimplementedthefirstTransformermodelsand
+hasbeencruciallyinvolvedineveryaspectofthiswork.Noamproposedscaleddot-productattention,multi-head
+attentionandtheparameter-freepositionrepresentationandbecametheotherpersoninvolvedinnearlyevery
+detail.Nikidesigned,implemented,tunedandevaluatedcountlessmodelvariantsinouroriginalcodebaseand
+tensor2tensor.Llionalsoexperimentedwithnovelmodelvariants,wasresponsibleforourinitialcodebase,and
+efficientinferenceandvisualizations.LukaszandAidanspentcountlesslongdaysdesigningvariouspartsofand
+implementingtensor2tensor,replacingourearliercodebase,greatlyimprovingresultsandmassivelyaccelerating
+ourresearch.
+†WorkperformedwhileatGoogleBrain.
+‡WorkperformedwhileatGoogleResearch.
+31stConferenceonNeuralInformationProcessingSystems(NIPS2017),LongBeach,CA,USA.
+3202
+guA
+2
+]LC.sc[
+7v26730.6071:viXra
