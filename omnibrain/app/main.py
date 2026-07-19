@@ -22,8 +22,10 @@ def create_app() -> FastAPI:
     # 3. Teammate's root landing endpoint
     @app.get("/")
     def root_check():
-        return {"status": "success", "message": "OmniBrain Backend Running"}
+        return {"status": "success", "message": "OmniBrain Backend Running", "timestamp": datetime.now(timezone.utc).isoformat(),}
 
+
+    
     # 4. Original standardized health check endpoint
     @app.get("/health", tags=["health"])
     async def health_check() -> dict[str, str]:
