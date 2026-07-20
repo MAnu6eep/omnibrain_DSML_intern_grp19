@@ -19,8 +19,6 @@ with open("output_pdf/pymupdf_output.txt", "w", encoding="utf-8") as f:
 with open("output_pdf/pdfplumber_output.txt", "w", encoding="utf-8") as f:
     f.write(text2)
 
-
-
 with open("output_pdf/15_pages.txt", "w", encoding="utf-8") as f:
 
     for page_num in range(len(doc)):
