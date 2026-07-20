@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-
+from omnibrain.app.api.routes.ingestion import router as ingestion_router
 from omnibrain.app.core.constants import APP_NAME, APP_VERSION
 
 
@@ -22,12 +22,15 @@ def create_app() -> FastAPI:
     # 3. Teammate's root landing endpoint
     @app.get("/")
     def root_check():
-        return {"status": "success", "message": "OmniBrain Backend Running"}
+        return {"status": "success", "message": "OmniBrain Backend Running", "timestamp": datetime.now(timezone.utc).isoformat(),}
 
+
+    
     # 4. Original standardized health check endpoint
     @app.get("/health", tags=["health"])
     async def health_check() -> dict[str, str]:
         return {"status": "ok"}
+    app.include_router(ingestion_router)
 
     return app
 
