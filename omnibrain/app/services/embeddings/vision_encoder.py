@@ -1,49 +1,57 @@
 from PIL import Image
-import torch
-from transformers import CLIPModel, CLIPProcessor
+from sentence_transformers import SentenceTransformer
 
 
 class VisionEncoder:
     """
-    Generates CLIP embeddings for extracted images.
+    Generates 512-dimensional CLIP embeddings for extracted images.
     """
 
     def __init__(self):
-        self.model_name = "openai/clip-vit-base-patch32"
-
-        self.processor = CLIPProcessor.from_pretrained(self.model_name)
-        self.model = CLIPModel.from_pretrained(self.model_name)
-
-        self.model.eval()
+        self.model_name = "clip-ViT-B-32"
+        self.model = SentenceTransformer(self.model_name)
 
     def encode_image(self, image_path):
+        """
+        Generate a normalized 512-dimensional embedding.
+
+        Args:
+            image_path (str): Path to image.
+
+        Returns:
+            list: 512-dimensional embedding.
+        """
+
         image = Image.open(image_path).convert("RGB")
 
-        inputs = self.processor(
-            images=image,
-            return_tensors="pt"
+        embedding = self.model.encode(
+            image,
+            convert_to_numpy=True,
+            normalize_embeddings=True,
         )
-
-        with torch.no_grad():
-
-            vision_outputs = self.model.vision_model(
-                pixel_values=inputs["pixel_values"]
-            )
-
-            pooled = vision_outputs.pooler_output
-
-            embedding = self.model.visual_projection(pooled)
-
-        embedding = embedding.squeeze(0)
 
         return embedding.tolist()
 
+    def build_image_profile(self, image_data, image_id):
+        """
+        Build a structured image profile.
 
-if __name__ == "__main__":
-    encoder = VisionEncoder()
+        Args:
+            image_data (dict): Output from extractor.py
+            image_id (str): Unique image id
 
-    embedding = encoder.encode_image(
-        "output/images/page_1_image_1.jpeg"
-    )
+        Returns:
+            dict
+        """
 
-    print(f"Embedding length: {len(embedding)}")
+        embedding = self.encode_image(
+            image_data["file_path"]
+        )
+
+        return {
+            "image_id": image_id,
+            "page": image_data["page"],
+            "caption": image_data.get("caption"),
+            "file_path": image_data["file_path"],
+            "embedding": embedding,
+        }
