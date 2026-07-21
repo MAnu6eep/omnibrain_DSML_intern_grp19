@@ -15,55 +15,47 @@ class TextIndexer:
     """
 
     def __init__(self):
-        # Load FastEmbed model
         self.model = TextEmbedding()
 
     def index(self, client, chunks):
         """
         Convert text chunks into embeddings and store them in Qdrant.
 
-        Parameters
-        ----------
-        client : QdrantClient
-            Initialized Qdrant client.
+        Expected input:
 
-        chunks : list[dict]
-            Example:
-            [
-                {
-                    "chunk_id": 1,
-                    "text": "This is sample text.",
-                    "page_number": 2,
-                    "source_pdf": "sample.pdf"
-                }
-            ]
+        [
+            {
+                "chunk_id": "page2_chunk7",
+                "text": "This is sample text.",
+                "page": 2,
+                "source": "sample.pdf"
+            }
+        ]
         """
 
         points = []
 
         for chunk in chunks:
-            # Generate embedding
             embedding = list(
                 self.model.embed([chunk["text"]])
             )[0].tolist()
 
-            # Create Qdrant point
             point = PointStruct(
                 id=chunk["chunk_id"],
                 vector=embedding,
                 payload={
+                    "chunk_id": chunk["chunk_id"],
                     "text": chunk["text"],
-                    "page_number": chunk["page_number"],
-                    "source_pdf": chunk["source_pdf"],
+                    "page": chunk["page"],
+                    "source": chunk["source"],
                 },
             )
 
             points.append(point)
 
-        # Upload to Qdrant
         client.upsert(
             collection_name=TEXT_COLLECTION,
             points=points,
         )
 
-        print(f"Successfully indexed {len(points)} text chunks.")
+        print(f"Successfully indexed {len(points)} text chunks into '{TEXT_COLLECTION}'.")
