@@ -23,7 +23,8 @@ class TextChunk(BaseModel):
 # 4. Manav's (Backend Eng) API Response contract
 class IngestionResponse(BaseModel):
     task_id: str
-    status: str = Field("processing", description="Current pipeline state: processing, success, failed")
+    status: str = "processing"
     pages_parsed: int
+    text_chunks: int
     images_extracted: int
     message: str
