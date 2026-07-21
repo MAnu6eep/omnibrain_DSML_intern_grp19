@@ -46,3 +46,9 @@ Run the backend server locally using:
 
 ```bash
 uvicorn apps.main:app --reload
+
+## 🚀 Quick Start Runbook
+
+### 1. Prerequisites
+* Docker Desktop (running)
+* Python 3.11+
