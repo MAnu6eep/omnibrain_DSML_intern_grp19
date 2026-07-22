@@ -1,61 +1,42 @@
-"""
-Text vector indexing layer for Qdrant.
-"""
+from uuid import uuid4
 
 from fastembed import TextEmbedding
 from qdrant_client.models import PointStruct
 
 from omnibrain.vectorstore.collections import TEXT_COLLECTION
+from omnibrain.vectorstore.qdrant_client import QdrantClientWrapper
+
+embedding_model = TextEmbedding("BAAI/bge-small-en-v1.5")
 
 
-class TextIndexer:
+def index_text_chunks(chunks: list[str]) -> bool:
     """
-    Converts text chunks into embeddings and uploads them
-    into the Qdrant text collection.
+    Generate BGE embeddings and upsert into the Qdrant text collection.
     """
 
-    def __init__(self):
-        self.model = TextEmbedding()
+    if not chunks:
+        return False
 
-    def index(self, client, chunks):
-        """
-        Convert text chunks into embeddings and store them in Qdrant.
+    client = QdrantClientWrapper().client()
 
-        Expected input:
+    embeddings = list(embedding_model.embed(chunks))
 
-        [
-            {
-                "chunk_id": "page2_chunk7",
-                "text": "This is sample text.",
-                "page": 2,
-                "source": "sample.pdf"
-            }
-        ]
-        """
+    points = []
 
-        points = []
-
-        for chunk in chunks:
-            embedding = list(
-                self.model.embed([chunk["text"]])
-            )[0].tolist()
-
-            point = PointStruct(
-                id=chunk["chunk_id"],
-                vector=embedding,
+    for text, vector in zip(chunks, embeddings):
+        points.append(
+            PointStruct(
+                id=str(uuid4()),
+                vector=vector.tolist(),
                 payload={
-                    "chunk_id": chunk["chunk_id"],
-                    "text": chunk["text"],
-                    "page": chunk["page"],
-                    "source": chunk["source"],
+                    "text": text,
                 },
             )
-
-            points.append(point)
-
-        client.upsert(
-            collection_name=TEXT_COLLECTION,
-            points=points,
         )
 
-        print(f"Successfully indexed {len(points)} text chunks into '{TEXT_COLLECTION}'.")
+    client.upsert(
+        collection_name=TEXT_COLLECTION,
+        points=points,
+    )
+
+    return True
