@@ -145,3 +145,72 @@ def extract_images(pdf_path: str, output_dir: str) -> List[Dict]:
         pdf.close()
 
     return extracted_images
+
+
+def extract_images_from_pdf(pdf_path: str) -> List[Dict]:
+    """
+    Standardized image extraction interface.
+
+    Extracts images from a PDF and returns structured image
+    records including image bytes, caption and metadata.
+
+    Args:
+        pdf_path: Path to PDF.
+
+    Returns:
+        List of dictionaries.
+    """
+
+    pdf = fitz.open(pdf_path)
+
+    images = []
+
+    seen_hashes = set()
+
+    try:
+        for page_number in range(len(pdf)):
+
+            page = pdf.load_page(page_number)
+
+            page_images = page.get_images(full=True)
+
+            for image_index, image in enumerate(page_images):
+
+                xref = image[0]
+
+                try:
+                    base_image = pdf.extract_image(xref)
+                except Exception:
+                    continue
+
+                image_bytes = base_image["image"]
+
+                image_hash = hashlib.sha256(image_bytes).hexdigest()
+
+                if image_hash in seen_hashes:
+                    continue
+
+                seen_hashes.add(image_hash)
+
+                rects = page.get_image_rects(xref)
+
+                image_rect = rects[0] if rects else None
+
+                caption = None
+
+                if image_rect:
+                    caption = find_caption(page, image_rect)
+
+                images.append(
+                    {
+                        "image_id": f"img_{page_number + 1}_{image_index + 1}",
+                        "page_number": page_number + 1,
+                        "image_bytes": image_bytes,
+                        "caption": caption,
+                    }
+                )
+
+    finally:
+        pdf.close()
+
+    return images
