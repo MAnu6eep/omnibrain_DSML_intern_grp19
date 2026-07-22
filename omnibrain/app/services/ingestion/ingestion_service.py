@@ -29,7 +29,7 @@ except ImportError:
             ]
 
 try:
-    from omnibrain.app.services.vision.extractor import extract_images_from_pdf
+    from omnibrain.app.services.vision.extractor import extract_images as extract_images_from_pdf
 except ImportError:
     def extract_images_from_pdf(pdf_path: str) -> List[Dict[str, Any]]:
         logger.warning("Using fallback vision extraction interface")

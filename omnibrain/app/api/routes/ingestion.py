@@ -2,6 +2,7 @@ from fastapi import APIRouter, UploadFile, File, HTTPException
 import tempfile
 import os
 import uuid
+from omnibrain.app.services.ingestion.ingestion_service import IngestionService
 
 router = APIRouter(prefix="/api/v1/ingestion", tags=["Ingestion"])
 job_store = {}
@@ -56,26 +57,28 @@ async def upload_pdf(file: UploadFile = File(...)):
 
         # -------- Pipeline --------
 
-        text_chunks = await parse_document(temp_path)
+        service = IngestionService()
 
-        image_chunks = await process_images(temp_path)
-
-        all_chunks = text_chunks + image_chunks
-
-        result = await store_vectors(all_chunks)
+        result = service.process_pdf(
+            temp_path,
+            source_filename=file.filename
+        )
 
         job_store[upload_id] = {
-            "status": "completed",
-            "pages": 0,  # update when parser returns page count
-            "text_chunks": len(text_chunks),
-            "images": len(image_chunks),
+             "status": result.status,
+             "pages": result.pages_parsed,
+             "text_chunks": result.text_chunks,
+             "images": result.images_extracted,
         }
 
         return {
             "upload_id": upload_id,
-            "status": "processing"
-            
+            "status": result.status,
+            "pages": result.pages_parsed,
+            "text_chunks": result.text_chunks,
+            "images": result.images_extracted,
         }
+        
     except Exception as e:
 
         job_store[upload_id]["status"] = "failed"
