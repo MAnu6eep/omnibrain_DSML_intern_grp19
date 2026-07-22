@@ -1,51 +1,26 @@
+from pathlib import Path
+from typing import Any, Dict, List
+
 import fitz
-import pdfplumber
 
-pdf_path = "data/Attention_is_all_you_need.pdf"
 
-doc = fitz.open(pdf_path)
-print("Number of pages:", len(doc))
+def extract_text_and_chunk(pdf_path: str) -> List[Dict[str, Any]]:
+    """Parses a PDF document using PyMuPDF, extracts text page-by-page, and breaks
 
-page = doc[0]
-text = page.get_text()
+    paragraphs into structured text chunks with metadata tracking.
+    """
+    if not Path(pdf_path).exists():
+        raise FileNotFoundError(f"PDF file not found: {pdf_path}")
 
-with pdfplumber.open(pdf_path) as pdf:
-    first_page = pdf.pages[0]
-    text2 = first_page.extract_text()
-
-with open("output_pdf/pymupdf_output.txt", "w", encoding="utf-8") as f:
-    f.write(text)
-
-with open("output_pdf/pdfplumber_output.txt", "w", encoding="utf-8") as f:
-    f.write(text2)
-
-with open("output_pdf/15_pages.txt", "w", encoding="utf-8") as f:
+    doc = fitz.open(pdf_path)
+    chunks = []
+    chunk_counter = 0
 
     for page_num in range(len(doc)):
         page = doc[page_num]
         text = page.get_text()
 
-        f.write("=" * 50 + "\n")
-        f.write(f"Page {page_num + 1}\n")
-        f.write("=" * 50 + "\n\n")
-        f.write(text)
-        f.write("\n\n")
-
-
-
-print("Done! Extracted", len(doc), "pages.")
-
-
-
-with open("output_pdf/parsing.txt", "w", encoding="utf-8") as f:
-    for page_num in range(len(doc)):
-        page = doc[page_num]
-        text = page.get_text()
-
-        f.write("=" * 60 + "\n")
-        f.write(f"PAGE {page_num + 1}\n")
-        f.write("=" * 60 + "\n\n")
-
+        # Split text by paragraph double breaks
         paragraphs = text.split("\n\n")
 
         for para in paragraphs:
@@ -54,16 +29,44 @@ with open("output_pdf/parsing.txt", "w", encoding="utf-8") as f:
                 continue
 
             lines = para.split("\n")
+            section_heading = "General"
 
-            # First line as title if short
+            # Check if first line behaves like a header title
             if len(lines[0]) < 80:
-                f.write(f"TITLE: {lines[0]}\n")
-
-                if len(lines) > 1:
-                    body = " ".join(lines[1:])
-                    f.write(f"PARAGRAPH: {body}\n\n")
+                section_heading = lines[0]
+                body_text = " ".join(lines[1:]) if len(lines) > 1 else lines[0]
             else:
-                body = " ".join(lines)
-                f.write(f"PARAGRAPH: {body}\n\n")
+                body_text = " ".join(lines)
 
-doc.close()
+            if not body_text.strip():
+                continue
+
+            chunk_id = f"page_{page_num + 1}_chunk_{chunk_counter}"
+
+            chunks.append(
+                {
+                    "chunk_id": chunk_id,
+                    "text": body_text,
+                    "page_number": page_num + 1,
+                    "metadata": {
+                        "source": Path(pdf_path).name,
+                        "section": section_heading,
+                        "chunk_id": chunk_id,
+                    },
+                }
+            )
+            chunk_counter += 1
+
+    doc.close()
+    return chunks
+
+
+if __name__ == "__main__":
+    # Local standalone execution/testing
+    sample_path = "data/Attention_is_all_you_need.pdf"
+    if Path(sample_path).exists():
+        result_chunks = extract_text_and_chunk(sample_path)
+        print(
+            f"Done! Extracted {len(result_chunks)} chunks from {sample_path}"
+            " successfully."
+        )
