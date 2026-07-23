@@ -16,3 +16,8 @@ class ChatResponse(BaseModel):
     response: str
     thought_process: List[ThoughtStep]
     images: List[str] = []
+class ChatResponse(BaseModel):
+    response: str
+    thought_process: List[ThoughtStep]
+    images: List[str] = []
+    timestamp: str

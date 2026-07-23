@@ -1,4 +1,5 @@
 from fastapi import APIRouter
+from datetime import datetime, timezone
 
 from omnibrain.app.schemas.chat import (
     ChatRequest,
@@ -28,4 +29,5 @@ async def chat(request: ChatRequest):
             ),
         ],
         images=[],
+        timestamp=datetime.now(timezone.utc).isoformat()
     )
