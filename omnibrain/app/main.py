@@ -3,6 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from omnibrain.app.api.routes.ingestion import router as ingestion_router
 from omnibrain.app.core.constants import APP_NAME, APP_VERSION
+from omnibrain.app.api.routes.chat import router as chat_router
 
 
 def create_app() -> FastAPI:
@@ -32,8 +33,10 @@ def create_app() -> FastAPI:
     async def health_check() -> dict[str, str]:
         return {"status": "ok"}
     app.include_router(ingestion_router)
+    app.include_router(chat_router)
 
     return app
 
 
 app = create_app()
+
