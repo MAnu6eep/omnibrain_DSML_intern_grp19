@@ -15,9 +15,8 @@ class ThoughtStep(BaseModel):
 class ChatResponse(BaseModel):
     response: str
     thought_process: List[ThoughtStep]
-    images: List[str] = []
-class ChatResponse(BaseModel):
-    response: str
-    thought_process: List[ThoughtStep]
-    images: List[str] = []
-    timestamp: str
+    images: List[str] = Field(default_factory=list)
+    retrieved_text: List[RetrievedTextChunk] = Field(default_factory=list)
+    retrieved_images: List[RetrievedImage] = Field(default_factory=list)
+    status: str = "completed"
+    timestamp: Optional[str] = None
