@@ -19,8 +19,9 @@ def search_text_chunks(query: str, top_k: int = 5) -> list[dict]:
         top_k: Number of results to return.
 
     Returns:
-        List of dictionaries containing text, page, and similarity score.
+        List of dictionaries containing text, metadata, chunk ID and score.
     """
+
     try:
         # Generate embedding for the query
         query_vector = list(embedding_model.embed([query]))[0]
@@ -36,12 +37,21 @@ def search_text_chunks(query: str, top_k: int = 5) -> list[dict]:
         results = []
 
         for point in response.points:
+
             payload = point.payload or {}
 
             results.append(
                 {
+                    "chunk_id": payload.get("chunk_id", str(point.id)),
+                    "document": payload.get(
+                        "document",
+                        payload.get("source", "Unknown Document"),
+                    ),
+                    "page": payload.get(
+                        "page_number",
+                        payload.get("page", "Unknown"),
+                    ),
                     "text": payload.get("text", ""),
-                    "page": payload.get("page", "Unknown"),
                     "score": round(point.score, 4),
                 }
             )
@@ -54,6 +64,7 @@ def search_text_chunks(query: str, top_k: int = 5) -> list[dict]:
 
 
 if __name__ == "__main__":
+
     query = "What is reinforcement learning?"
 
     print(f"\nSearching for: {query}\n")
@@ -64,11 +75,14 @@ if __name__ == "__main__":
         print("No results found.")
 
     for i, item in enumerate(results, start=1):
+
         print("=" * 60)
         print(f"Result {i}")
         print("=" * 60)
-        print(f"Score : {item['score']}")
-        print(f"Page  : {item['page']}")
+        print(f"Chunk ID : {item['chunk_id']}")
+        print(f"Document : {item['document']}")
+        print(f"Page     : {item['page']}")
+        print(f"Score    : {item['score']}")
         print("Text:")
         print(item["text"])
         print()
