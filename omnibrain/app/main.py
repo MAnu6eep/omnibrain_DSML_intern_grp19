@@ -9,7 +9,7 @@ from omnibrain.app.api.routes.chat import router as chat_router
 def create_app() -> FastAPI:
     # 1. Initialize core application using repository constants
     app = FastAPI(
-        title=APP_NAME, description="Backend API for OmniBrain", version=APP_VERSION
+        title=APP_NAME, description="This is backend for omnibrain", version=APP_VERSION
     )
 
     # 2. Inject your teammate's required CORS middleware configuration
