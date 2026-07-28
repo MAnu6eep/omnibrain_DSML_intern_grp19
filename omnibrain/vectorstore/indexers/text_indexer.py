@@ -70,6 +70,11 @@ def index_text_chunks(chunks: List[Any]) -> bool:
                     "document",
                     getattr(chunk_obj, "source", "Unknown Document"),
                 ),
+                "source": getattr(
+                    chunk_obj, "source", getattr(chunk_obj, "document", "")
+                ),
+                "source_path": getattr(chunk_obj, "source_path", ""),
+                "modality": getattr(chunk_obj, "modality", "text"),
                 **getattr(chunk_obj, "metadata", {}),
             }
 
@@ -86,6 +91,9 @@ def index_text_chunks(chunks: List[Any]) -> bool:
                     "document",
                     chunk_obj.get("source", "Unknown Document"),
                 ),
+                "source": chunk_obj.get("source", chunk_obj.get("document", "")),
+                "source_path": chunk_obj.get("source_path", ""),
+                "modality": chunk_obj.get("modality", "text"),
                 **chunk_obj.get("metadata", {}),
             }
 
@@ -99,6 +107,7 @@ def index_text_chunks(chunks: List[Any]) -> bool:
                 "page_number": 1,
                 "chunk_id": str(uuid4()),
                 "document": "Unknown Document",
+                "modality": "text",
             }
 
         points.append(

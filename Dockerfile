@@ -4,9 +4,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1
 
-WORKDIR /workspace
+WORKDIR /app
 
-COPY requirements.txt ./requirements.txt
+COPY requirements.txt .
 RUN pip install --upgrade pip && pip install -r requirements.txt
 
 COPY . .

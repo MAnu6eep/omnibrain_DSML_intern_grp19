@@ -50,7 +50,10 @@ if __name__ == "__main__":
             "document": "AI_Book.pdf",
             "page": 5,
             "score": 0.95,
-            "text": "Retrieval-Augmented Generation combines retrieval with language models.",
+            "text": (
+                "Retrieval-Augmented Generation combines retrieval "
+                "with language models."
+            ),
         },
         {
             "chunk_id": "chunk_002",

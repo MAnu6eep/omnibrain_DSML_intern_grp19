@@ -827,6 +827,7 @@ Page 13
 ==================================================
 
 Attention Visualizations
+Input-Input Layer5
 It
 is
 in
@@ -904,6 +905,7 @@ the word ‘making’. Different colors represent different heads. Best viewed i
 Page 14
 ==================================================
 
+Input-Input Layer5
 The
 Law
 will
@@ -958,6 +960,7 @@ opinion
 .
 <EOS>
 <pad>
+Input-Input Layer5
 The
 Law
 will
@@ -1022,6 +1025,7 @@ and 6. Note that the attentions are very sharp for this word.
 Page 15
 ==================================================
 
+Input-Input Layer5
 The
 Law
 will
@@ -1076,6 +1080,7 @@ opinion
 .
 <EOS>
 <pad>
+Input-Input Layer5
 The
 Law
 will
@@ -1134,5 +1139,3 @@ Figure 5: Many of the attention heads exhibit behaviour that seems related to th
 sentence. We give two such examples above, from two different heads from the encoder self-attention
 at layer 5 of 6. The heads clearly learned to perform different tasks.
 15
-
-

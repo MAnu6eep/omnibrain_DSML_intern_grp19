@@ -89,6 +89,33 @@ def index_image_vectors(images: List[Any]) -> bool:
                     "image_path": str(image_path),
                     "page_number": page_num,
                     "caption": caption,
+                    "source": (
+                        getattr(img_obj, "source", "")
+                        if hasattr(img_obj, "source")
+                        else (
+                            img_obj.get("source", "")
+                            if isinstance(img_obj, dict)
+                            else ""
+                        )
+                    ),
+                    "source_path": (
+                        getattr(img_obj, "source_path", "")
+                        if hasattr(img_obj, "source_path")
+                        else (
+                            img_obj.get("source_path", "")
+                            if isinstance(img_obj, dict)
+                            else ""
+                        )
+                    ),
+                    "modality": (
+                        getattr(img_obj, "modality", "image")
+                        if hasattr(img_obj, "modality")
+                        else (
+                            img_obj.get("modality", "image")
+                            if isinstance(img_obj, dict)
+                            else "image"
+                        )
+                    ),
                 },
             )
         )

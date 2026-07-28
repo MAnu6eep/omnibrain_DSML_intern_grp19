@@ -12,16 +12,19 @@ class QdrantClientWrapper:
     api_key: str = None
 
     def __post_init__(self):
-        # Allow environment override or default to settings
-        # Split the os.getenv assignment
         if self.url is None:
-            self.url = os.getenv("QDRANT_URL") or getattr(
-                settings, "qdrant_url", "http://localhost:6333"
-            )
+            host = os.getenv("QDRANT_HOST")
+            port = os.getenv("QDRANT_PORT")
 
-        # Replace service name with localhost if running outside Docker
-        if "omnibrain_vector_db" in self.url or "qdrant" in self.url:
-            if not os.path.exists("/.dockerenv"):
+            if host and port and not os.getenv("QDRANT_URL"):
+                self.url = f"http://{host}:{port}"
+            else:
+                self.url = os.getenv("QDRANT_URL") or getattr(
+                    settings, "qdrant_url", "http://localhost:6333"
+                )
+
+        if "omnibrain_vector_db" in self.url or self.url.endswith(":6333"):
+            if not os.path.exists("/.dockerenv") and "localhost" not in self.url:
                 self.url = "http://localhost:6333"
 
         if self.api_key is None:

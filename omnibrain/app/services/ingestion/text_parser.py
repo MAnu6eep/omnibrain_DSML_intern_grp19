@@ -1,91 +1,66 @@
+from pathlib import Path
+from typing import Any, Dict, List
+
 import fitz
-import pdfplumber
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-pdf_path = "data/Attention_is_all_you_need.pdf"
-
-doc = fitz.open(pdf_path)
-print("Number of pages:", len(doc))
-
-page = doc[0]
-text = page.get_text()
-
-with pdfplumber.open(pdf_path) as pdf:
-    first_page = pdf.pages[0]
-    text2 = first_page.extract_text()
-
-with open("output_pdf/pymupdf_output.txt", "w", encoding="utf-8") as f:
-    f.write(text)
-
-with open("output_pdf/pdfplumber_output.txt", "w", encoding="utf-8") as f:
-    f.write(text2)
-
-with open("output_pdf/15_pages.txt", "w", encoding="utf-8") as f:
-
-    for page_num in range(len(doc)):
-        page = doc[page_num]
-        text = page.get_text()
-
-        f.write("=" * 50 + "\n")
-        f.write(f"Page {page_num + 1}\n")
-        f.write("=" * 50 + "\n\n")
-        f.write(text)
-        f.write("\n\n")
 
 
+def extract_text_and_chunk(
+    pdf_path: str, chunk_size: int = 500, chunk_overlap: int = 50
+) -> List[Dict[str, Any]]:
+    """Extract page text from a PDF and return chunk dictionaries with metadata."""
+    pdf_file = Path(pdf_path)
+    if not pdf_file.exists():
+        raise FileNotFoundError(f"PDF file not found: {pdf_path}")
 
-print("Done! Extracted", len(doc), "pages.")
+    doc = fitz.open(pdf_file)
+    splitter = RecursiveCharacterTextSplitter(
+        chunk_size=chunk_size,
+        chunk_overlap=chunk_overlap,
+    )
 
+    chunks: List[Dict[str, Any]] = []
 
+    try:
+        for page_num in range(len(doc)):
+            page = doc[page_num]
+            page_text = (page.get_text("text") or "").strip()
 
-with open("output_pdf/parsing.txt", "w", encoding="utf-8") as f:
-    for page_num in range(len(doc)):
-        page = doc[page_num]
-        text = page.get_text()
-
-        f.write("=" * 60 + "\n")
-        f.write(f"PAGE {page_num + 1}\n")
-        f.write("=" * 60 + "\n\n")
-
-        paragraphs = text.split("\n\n")
-
-        for para in paragraphs:
-            para = para.strip()
-            if not para:
+            if not page_text:
                 continue
 
-            lines = para.split("\n")
+            page_chunks = splitter.split_text(page_text)
 
-            # First line as title if short
-            if len(lines[0]) < 80:
-                f.write(f"TITLE: {lines[0]}\n")
+            for chunk_index, chunk_text in enumerate(page_chunks):
+                chunk_id = f"{pdf_file.stem}_p{page_num + 1}_c{chunk_index}"
 
-                if len(lines) > 1:
-                    body = " ".join(lines[1:])
-                    f.write(f"PARAGRAPH: {body}\n\n")
-            else:
-                body = " ".join(lines)
-                f.write(f"PARAGRAPH: {body}\n\n")
+                chunks.append(
+                    {
+                        "chunk_id": chunk_id,
+                        "text": chunk_text.strip(),
+                        "page_number": page_num + 1,
+                        "source": pdf_file.name,
+                        "source_path": str(pdf_file),
+                        "metadata": {
+                            "source": pdf_file.name,
+                            "source_path": str(pdf_file),
+                            "page_number": page_num + 1,
+                            "chunk_index": chunk_index,
+                            "chunk_id": chunk_id,
+                            "modality": "text",
+                            "table_extraction": "partial",
+                            "tables_extracted": False,
+                        },
+                    }
+                )
+    finally:
+        doc.close()
 
-
-with open("output_pdf/parsing.txt", "r", encoding="utf-8") as f:
-    text = f.read()
-
-# Create text splitter
-text_splitter = RecursiveCharacterTextSplitter(
-    chunk_size=500,
-    chunk_overlap=50
-)
-
-chunks = text_splitter.split_text(text)
-
-# Save chunks
-with open("output_pdf/chunks.txt", "w", encoding="utf-8") as f:
-    for i, chunk in enumerate(chunks):
-        f.write(f"========== CHUNK {i+1} ==========\n")
-        f.write(chunk)
-        f.write("\n\n")
-
-print(f"Created {len(chunks)} chunks.")
+    return chunks
 
 
-doc.close()
+if __name__ == "__main__":
+    pdf_path = "data/Attention_is_all_you_need.pdf"
+    if Path(pdf_path).exists():
+        doc = fitz.open(pdf_path)
+        print("Number of pages:", len(doc))

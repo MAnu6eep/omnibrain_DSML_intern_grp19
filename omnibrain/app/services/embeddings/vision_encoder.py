@@ -44,9 +44,7 @@ class VisionEncoder:
             dict
         """
 
-        embedding = self.encode_image(
-            image_data["file_path"]
-        )
+        embedding = self.encode_image(image_data["file_path"])
 
         return {
             "image_id": image_id,

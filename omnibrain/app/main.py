@@ -1,18 +1,31 @@
+import os
 from datetime import datetime, timezone
+
+from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.routing import APIRoute
+
+from omnibrain.app.api.routes.chat import router as chat_router
 from omnibrain.app.api.routes.ingestion import router as ingestion_router
 from omnibrain.app.core.constants import APP_NAME, APP_VERSION
-from omnibrain.app.api.routes.chat import router as chat_router
+from omnibrain.app.core.logging import logger
+
+load_dotenv()
+
+print("=" * 80)
+print("ENV CHECK")
+print("GEMINI =", "Present" if os.getenv("GEMINI_API_KEY") else "NOT SET")
+print("=" * 80)
 
 
 def create_app() -> FastAPI:
-    # 1. Initialize core application using repository constants
     app = FastAPI(
-        title=APP_NAME, description="Backend API for OmniBrain", version=APP_VERSION
+        title=APP_NAME,
+        description="Backend API for OmniBrain",
+        version=APP_VERSION,
     )
 
-    # 2. Inject your teammate's required CORS middleware configuration
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
@@ -21,22 +34,40 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
-    # 3. Teammate's root landing endpoint
     @app.get("/")
-    def root_check():
-        return {"status": "success", "message": "OmniBrain Backend Running", "timestamp": datetime.now(timezone.utc).isoformat(),}
+    async def root():
+        return {
+            "status": "success",
+            "message": "OmniBrain Backend Running",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
 
-
-    
-    # 4. Original standardized health check endpoint
     @app.get("/health", tags=["health"])
-    async def health_check() -> dict[str, str]:
+    async def health():
         return {"status": "ok"}
-    app.include_router(ingestion_router)
-    app.include_router(chat_router)
+
+    # -------------------------
+    # Register Routers
+    # -------------------------
+
+    app.include_router(
+        ingestion_router,
+        prefix="/api/v1/ingestion",
+        tags=["Ingestion"],
+    )
+
+    app.include_router(
+        chat_router,
+        prefix="/api/v1/chat",
+        tags=["Chat"],
+    )
+
+    logger.info(
+        "Registered %s routes",
+        len([route for route in app.routes if isinstance(route, APIRoute)]),
+    )
 
     return app
 
 
 app = create_app()
-
