@@ -14,8 +14,9 @@ def _get_llm():
     if not api_key:
         return None
 
+    model_name = os.getenv("GEMINI_MODEL", "gemini-3.5-flash")
     return ChatGoogleGenerativeAI(
-        model="gemini-3.6-flash",
+        model=model_name,
         google_api_key=api_key,
         temperature=0,
     )

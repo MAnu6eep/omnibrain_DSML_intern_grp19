@@ -48,13 +48,16 @@ def _clean_result(payload: dict[str, Any], score: float, point_id: Any) -> dict:
     }
 
 
-def search_text_chunks(query: str, top_k: int = 5) -> list[dict]:
+def search_text_chunks(
+    query: str, top_k: int = 5, min_score: float = 0.40
+) -> list[dict]:
     """
     Search the text collection for the most similar chunks.
 
     Args:
         query: User query.
         top_k: Number of results to return.
+        min_score: Minimum similarity score threshold.
 
     Returns:
         List of dictionaries containing text, metadata, chunk ID and score.
@@ -79,6 +82,8 @@ def search_text_chunks(query: str, top_k: int = 5) -> list[dict]:
         seen_chunk_ids = set()
 
         for point in response.points:
+            if point.score < min_score:
+                continue
 
             payload = point.payload or {}
 

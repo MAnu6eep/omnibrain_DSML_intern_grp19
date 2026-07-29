@@ -12,8 +12,9 @@ def _get_llm():
     if not api_key:
         return None
 
+    model_name = os.getenv("GEMINI_MODEL", "gemini-3.5-flash")
     return ChatGoogleGenerativeAI(
-        model="gemini-3.6-flash",
+        model=model_name,
         google_api_key=api_key,
         temperature=0,
     )
@@ -130,9 +131,10 @@ def generator_node(state: AgentState) -> Dict[str, Any]:
             "messages": [
                 AIMessage(
                     content=(
-                        "I could not find useful indexed context for this "
-                        "question yet. Please upload or re-index a PDF and "
-                        "try again."
+                        "The vector store does not contain relevant "
+                        "context for this question. Please upload "
+                        "or re-upload the file(s) so we can process "
+                        "and add the required context into the system."
                     )
                 )
             ],
@@ -140,8 +142,8 @@ def generator_node(state: AgentState) -> Dict[str, Any]:
                 {
                     "agent": "Generator",
                     "action": (
-                        "No usable retrieval results were available; returned "
-                        "a safe fallback."
+                        "No relevant context found in vector store; requested "
+                        "file re-upload."
                     ),
                 }
             ],
@@ -153,10 +155,13 @@ def generator_node(state: AgentState) -> Dict[str, Any]:
     prompt = f"""
 You are OmniBrain.
 
-Answer ONLY using the retrieved context below.
+Answer ONLY using the relevant retrieved context below.
 
-If the context is insufficient, clearly state that the answer
-cannot be determined from the indexed documents.
+If the retrieved context does NOT contain sufficient relevant
+information to answer the question, clearly state:
+"The vector data does not contain sufficient relevant context to answer your question.
+Please upload or re-upload the relevant file(s) so we can process
+them and add the required context into the system."
 
 Retrieved Context:
 
