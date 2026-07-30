@@ -1,33 +1,76 @@
+from functools import lru_cache
+from typing import Any
+
 from fastembed import TextEmbedding
 
 from omnibrain.vectorstore.collections import TEXT_COLLECTION
 from omnibrain.vectorstore.qdrant_client import QdrantClientWrapper
 
-# Initialize the embedding model (384-dimensional vectors)
-embedding_model = TextEmbedding(model_name="BAAI/bge-small-en-v1.5")
 
-# Create Qdrant client
-client = QdrantClientWrapper().client()
+@lru_cache(maxsize=1)
+def get_embedding_model() -> TextEmbedding:
+    return TextEmbedding(model_name="BAAI/bge-small-en-v1.5")
 
 
-def search_text_chunks(query: str, top_k: int = 5) -> list[dict]:
+@lru_cache(maxsize=1)
+def get_client():
+    return QdrantClientWrapper().client()
+
+
+def _clean_result(payload: dict[str, Any], score: float, point_id: Any) -> dict:
+    text = (payload.get("text") or "").strip()
+
+    if not text:
+        return {}
+
+    page_number = payload.get("page_number", payload.get("page", 0))
+
+    return {
+        "chunk_id": payload.get("chunk_id", str(point_id)),
+        "document": payload.get(
+            "document",
+            payload.get("source", "Unknown Document"),
+        ),
+        "page": page_number,
+        "text": text,
+        "score": round(float(score), 4),
+        "source": payload.get(
+            "source",
+            payload.get("document", "")
+        ),
+        "modality": payload.get("modality", "text"),
+        "metadata": {
+            key: value
+            for key, value in payload.items()
+            if key not in {
+                "text",
+                "chunk_id",
+                "document",
+                "page_number",
+                "page",
+                "source",
+                "modality",
+            }
+        },
+    }
+
+
+def search_text_chunks(
+    query: str,
+    top_k: int = 5,
+    min_score: float = 0.40,
+) -> list[dict]:
     """
     Search the text collection for the most similar chunks.
-
-    Args:
-        query: User query.
-        top_k: Number of results to return.
-
-    Returns:
-        List of dictionaries containing text, metadata, chunk ID and score.
     """
 
     try:
-        # Generate embedding for the query
-        query_vector = list(embedding_model.embed([query]))[0]
 
-        # Perform similarity search
-        response = client.query_points(
+        query_vector = list(
+            get_embedding_model().embed([query])
+        )[0]
+
+        response = get_client().query_points(
             collection_name=TEXT_COLLECTION,
             query=query_vector,
             limit=top_k,
@@ -35,26 +78,29 @@ def search_text_chunks(query: str, top_k: int = 5) -> list[dict]:
         )
 
         results = []
+        seen_chunk_ids = set()
 
         for point in response.points:
 
+            if point.score < min_score:
+                continue
+
             payload = point.payload or {}
 
-            results.append(
-                {
-                    "chunk_id": payload.get("chunk_id", str(point.id)),
-                    "document": payload.get(
-                        "document",
-                        payload.get("source", "Unknown Document"),
-                    ),
-                    "page": payload.get(
-                        "page_number",
-                        payload.get("page", "Unknown"),
-                    ),
-                    "text": payload.get("text", ""),
-                    "score": round(point.score, 4),
-                }
+            cleaned = _clean_result(
+                payload,
+                point.score,
+                point.id,
             )
+
+            if not cleaned:
+                continue
+
+            if cleaned["chunk_id"] in seen_chunk_ids:
+                continue
+
+            seen_chunk_ids.add(cleaned["chunk_id"])
+            results.append(cleaned)
 
         return results
 

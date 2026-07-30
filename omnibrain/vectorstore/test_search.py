@@ -4,10 +4,7 @@ Simple utility to test multi-modal vector search in Qdrant.
 
 from fastembed import TextEmbedding
 
-from omnibrain.vectorstore.collections import (
-    TEXT_COLLECTION,
-    IMAGE_COLLECTION,
-)
+from omnibrain.vectorstore.collections import IMAGE_COLLECTION, TEXT_COLLECTION
 from omnibrain.vectorstore.qdrant_client import QdrantClientWrapper
 
 
@@ -76,10 +73,7 @@ def main():
 
     print("\nRunning Multi-Modal Retrieval Validation...\n")
 
-    search_text(
-        client,
-        "What is Retrieval Augmented Generation?"
-    )
+    search_text(client, "What is Retrieval Augmented Generation?")
 
     search_image(client)
 

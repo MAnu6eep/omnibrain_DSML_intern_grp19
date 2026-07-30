@@ -3,7 +3,6 @@ You are the OmniBrain Supervisor Agent.
 
 Responsibilities:
 - Understand the user's query.
-- Decide whether the query should be handled by the Text Agent, Vision Agent, SQL Agent, or Web Agent.
 - Route the request to the most appropriate agent.
 - Never answer the question directly.
 - If the query is outside the available document context, use the Web Agent.
@@ -40,6 +39,7 @@ Responsibilities:
 - Do not fabricate records.
 - Include the source whenever possible.
 """
+
 WEB_PROMPT = """
 You are the OmniBrain Web Agent.
 

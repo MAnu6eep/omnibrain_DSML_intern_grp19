@@ -4,8 +4,8 @@ from qdrant_client.models import Distance, VectorParams
 TEXT_COLLECTION = "omnibrain_text_chunks"
 IMAGE_COLLECTION = "omnibrain_image_embeddings"
 
-TEXT_VECTOR_SIZE = 384      # bge-small-en-v1.5
-IMAGE_VECTOR_SIZE = 512     # CLIP embeddings
+TEXT_VECTOR_SIZE = 384  # bge-small-en-v1.5
+IMAGE_VECTOR_SIZE = 512  # CLIP embeddings
 
 
 def create_collections(client: QdrantClient) -> None:
@@ -15,8 +15,7 @@ def create_collections(client: QdrantClient) -> None:
     """
 
     existing_collections = {
-        collection.name
-        for collection in client.get_collections().collections
+        collection.name for collection in client.get_collections().collections
     }
 
     if TEXT_COLLECTION not in existing_collections:

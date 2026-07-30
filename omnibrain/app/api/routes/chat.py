@@ -1,4 +1,5 @@
 
+
 from fastapi import APIRouter, HTTPException
 from langchain_core.messages import HumanMessage
 
@@ -71,89 +72,32 @@ def _clean_image_results(results):
         )
 
     return cleaned
-
-
-def build_mock_response(message: str) -> ChatResponse:
-    """
-    Build a temporary mock response for frontend integration.
-
-    TODO:
-    Replace this helper with the compiled LangGraph workflow
-    (app.invoke()) once the backend graph is available.
-    """
-    return ChatResponse(
-        response=f"Received: {message}",
-        thought_process=[
-            ThoughtStep(
-                agent="Retriever",
-                action="Searching relevant context",
-            ),
-            ThoughtStep(
-                agent="LLM",
-                action="Generating response",
-            ),
-        ],
-        images=[],
-        timestamp=datetime.now(timezone.utc).isoformat(),
-    )
-
-
 @router.post("", response_model=ChatResponse)
 async def chat(request: ChatRequest):
-    """
-    Temporary chat endpoint used for frontend integration.
-
-    TODO:
-    Replace the mock response with LangGraph app.invoke()
-    after the compiled workflow is available.
-    """
-    return build_mock_response(request.message)
-@router.post("", response_model=ChatResponse)
-@router.post("/", response_model=ChatResponse, include_in_schema=False)
-async def chat_endpoint(request: ChatRequest):
-
     try:
-
-        config = {
-            "configurable": {"thread_id": request.conversation_id or "default_session"}
-        }
-
-        initial_state = {
-            "messages": [HumanMessage(content=request.message)],
-            "retrieved_text": [],
-            "retrieved_images": [],
-            "thought_process": [],
-            "next_node": "",
-        }
-
-        final_state = graph_app.invoke(initial_state, config=config)
-
-        messages = final_state.get("messages", [])
-        retrieved_text = _clean_text_results(final_state.get("retrieved_text", []))
-        retrieved_images = _clean_image_results(final_state.get("retrieved_images", []))
-
-        final_response = messages[-1].content if messages else "Execution completed."
-
-        thoughts = [
-            ThoughtStep(
-                agent=t.get("agent", "Agent"),
-                action=t.get("action", ""),
-            )
-            for t in final_state.get("thought_process", [])
-        ]
-
-        images = [image.image_path for image in retrieved_images]
+        result = graph_app.invoke(
+            {
+                "messages": [HumanMessage(content=request.message)],
+                "source_name": request.source_name,
+                "top_k": request.top_k,
+            }
+        )
 
         return ChatResponse(
-            response=final_response,
-            thought_process=thoughts,
-            images=images,
-            retrieved_text=retrieved_text,
-            retrieved_images=retrieved_images,
+            response=result.get("response", ""),
+            thought_process=[
+                ThoughtStep(**step)
+                for step in result.get("thought_process", [])
+            ],
+            images=result.get("images", []),
+            retrieved_text=_clean_text_results(
+                result.get("retrieved_text", [])
+            ),
+            retrieved_images=_clean_image_results(
+                result.get("retrieved_images", [])
+            ),
             status="completed",
         )
 
     except Exception as e:
-        traceback.print_exc()
-        # Prints the full stack trace to the FastAPI logs
         raise HTTPException(status_code=500, detail=str(e))

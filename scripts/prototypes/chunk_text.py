@@ -5,10 +5,7 @@ with open("output_pdf/parsing.txt", "r", encoding="utf-8") as f:
     text = f.read()
 
 # Create text splitter
-text_splitter = RecursiveCharacterTextSplitter(
-    chunk_size=500,
-    chunk_overlap=50
-)
+text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
 
 chunks = text_splitter.split_text(text)
 
