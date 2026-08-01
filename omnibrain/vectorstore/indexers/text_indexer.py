@@ -56,9 +56,7 @@ def index_text_chunks(chunks: List[Any]) -> bool:
 
     for chunk_obj, text_str, vector in zip(chunks, text_strings, embeddings):
 
-        # -----------------------------
         # Object-based chunk
-        # -----------------------------
         if hasattr(chunk_obj, "metadata"):
 
             payload = {
@@ -70,20 +68,10 @@ def index_text_chunks(chunks: List[Any]) -> bool:
                     "document",
                     getattr(chunk_obj, "source", "Unknown Document"),
                 ),
-<<<<<<< HEAD
-=======
-                "source": getattr(
-                    chunk_obj, "source", getattr(chunk_obj, "document", "")
-                ),
-                "source_path": getattr(chunk_obj, "source_path", ""),
-                "modality": getattr(chunk_obj, "modality", "text"),
->>>>>>> develop
                 **getattr(chunk_obj, "metadata", {}),
             }
 
-        # -----------------------------
         # Dictionary-based chunk
-        # -----------------------------
         elif isinstance(chunk_obj, dict):
 
             payload = {
@@ -94,18 +82,13 @@ def index_text_chunks(chunks: List[Any]) -> bool:
                     "document",
                     chunk_obj.get("source", "Unknown Document"),
                 ),
-<<<<<<< HEAD
-=======
                 "source": chunk_obj.get("source", chunk_obj.get("document", "")),
                 "source_path": chunk_obj.get("source_path", ""),
                 "modality": chunk_obj.get("modality", "text"),
->>>>>>> develop
                 **chunk_obj.get("metadata", {}),
             }
 
-        # -----------------------------
         # Plain text
-        # -----------------------------
         else:
 
             payload = {
@@ -113,10 +96,7 @@ def index_text_chunks(chunks: List[Any]) -> bool:
                 "page_number": 1,
                 "chunk_id": str(uuid4()),
                 "document": "Unknown Document",
-<<<<<<< HEAD
-=======
                 "modality": "text",
->>>>>>> develop
             }
 
         points.append(
