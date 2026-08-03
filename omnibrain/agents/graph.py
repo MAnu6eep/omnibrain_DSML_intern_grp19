@@ -7,7 +7,7 @@ from omnibrain.agents.supervisor.supervisor import supervisor_node
 from omnibrain.agents.tools.web_search import execute_web_search
 from omnibrain.vectorstore.retrievers.image_retriever import search_images
 from omnibrain.vectorstore.retrievers.text_retriever import search_text_chunks
-
+from omnibrain.agents.direct_llm.direct_llm import direct_llm_node
 
 def text_agent_node(state: AgentState):
     query = state["messages"][-1].content
@@ -84,8 +84,8 @@ workflow.add_node("text_agent", text_agent_node)
 workflow.add_node("vision_agent", vision_agent_node)
 workflow.add_node("web_agent", web_agent_node)
 workflow.add_node("generator", generator_node)
+workflow.add_node("direct_llm", direct_llm_node)
 workflow.set_entry_point("supervisor")
-
 workflow.add_conditional_edges(
     "supervisor",
     route_next,
@@ -93,6 +93,7 @@ workflow.add_conditional_edges(
         "text_agent": "text_agent",
         "vision_agent": "vision_agent",
         "web_agent": "web_agent",
+        "direct_llm": "direct_llm",
         "FINISH": END,
     },
 )
@@ -102,6 +103,7 @@ workflow.add_edge("vision_agent", "generator")
 workflow.add_edge("web_agent", "generator")
 
 workflow.add_edge("generator", END)
-
-checkpointer = MemorySaver()
-app = workflow.compile(checkpointer=checkpointer)
+workflow.add_edge("direct_llm", END)
+##checkpointer = MemorySaver()
+#app = workflow.compile(checkpointer=checkpointer)
+app = workflow.compile()

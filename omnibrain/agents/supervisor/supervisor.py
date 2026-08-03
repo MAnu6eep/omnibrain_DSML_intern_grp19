@@ -25,20 +25,39 @@ def _get_llm():
 def _heuristic_route(query: str) -> tuple[str, str]:
     query_lower = query.lower()
 
+    # Vision related queries
     if any(
         term in query_lower
         for term in ("image", "figure", "diagram", "chart", "table", "visual")
     ):
         return "vision_agent", "Heuristic routing selected the vision agent."
 
+    # Web related queries
     if any(
         term in query_lower
         for term in ("web", "internet", "search", "latest", "current")
     ):
         return "web_agent", "Heuristic routing selected the web agent."
 
-    return "text_agent", "Heuristic routing selected the text agent."
+    # Document related queries
+    document_keywords = [
+        "pdf",
+        "document",
+        "file",
+        "page",
+        "chapter",
+        "chunk",
+        "upload",
+        "uploaded",
+        "summary",
+        "summarize",
+    ]
 
+    if any(keyword in query_lower for keyword in document_keywords):
+        return "text_agent", "Document query detected."
+
+    # Everything else goes directly to Gemini
+    return "direct_llm", "General query detected."
 
 def supervisor_node(state: AgentState) -> Dict[str, Any]:
     """
@@ -81,7 +100,7 @@ def supervisor_node(state: AgentState) -> Dict[str, Any]:
         content = content.replace("```", "").strip()
 
         decision = json.loads(content)
-        next_node = decision.get("next_node", "text_agent")
+        next_node = decision.get("next_node", "direct_llm")
         thought = decision.get("thought", "Routing request...")
     except Exception:
         next_node, thought = _heuristic_route(query)

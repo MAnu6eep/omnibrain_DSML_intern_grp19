@@ -21,9 +21,6 @@ print("=" * 80)
 
 def create_app() -> FastAPI:
     app = FastAPI(
-        title=APP_NAME,
-        description="Backend API for OmniBrain",
-        version=APP_VERSION,
     )
 
     app.add_middleware(

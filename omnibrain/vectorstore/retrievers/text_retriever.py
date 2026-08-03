@@ -19,23 +19,30 @@ def get_client():
 
 def _clean_result(payload: dict[str, Any], score: float, point_id: Any) -> dict:
     text = (payload.get("text") or "").strip()
+
     if not text:
         return {}
 
     page_number = payload.get("page_number", payload.get("page", 0))
+
     return {
         "chunk_id": payload.get("chunk_id", str(point_id)),
-        "document": payload.get("document", payload.get("source", "Unknown Document")),
+        "document": payload.get(
+            "document",
+            payload.get("source", "Unknown Document"),
+        ),
         "page": page_number,
         "text": text,
         "score": round(float(score), 4),
-        "source": payload.get("source", payload.get("document", "")),
+        "source": payload.get(
+            "source",
+            payload.get("document", "")
+        ),
         "modality": payload.get("modality", "text"),
         "metadata": {
             key: value
             for key, value in payload.items()
-            if key
-            not in {
+            if key not in {
                 "text",
                 "chunk_id",
                 "document",
@@ -49,28 +56,20 @@ def _clean_result(payload: dict[str, Any], score: float, point_id: Any) -> dict:
 
 
 def search_text_chunks(
-    query: str, top_k: int = 5, min_score: float = 0.40
+    query: str,
+    top_k: int = 5,
+    min_score: float = 0.40,
 ) -> list[dict]:
     """
     Search the text collection for the most similar chunks.
-
-    Args:
-        query: User query.
-        top_k: Number of results to return.
-        min_score: Minimum similarity score threshold.
-
-    Returns:
-        List of dictionaries containing text, metadata, chunk ID and score.
     """
 
-    if not query or not query.strip():
-        return []
-
     try:
-        # Generate embedding for the query
-        query_vector = list(get_embedding_model().embed([query]))[0]
 
-        # Perform similarity search
+        query_vector = list(
+            get_embedding_model().embed([query])
+        )[0]
+
         response = get_client().query_points(
             collection_name=TEXT_COLLECTION,
             query=query_vector,
@@ -82,12 +81,18 @@ def search_text_chunks(
         seen_chunk_ids = set()
 
         for point in response.points:
+
             if point.score < min_score:
                 continue
 
             payload = point.payload or {}
 
-            cleaned = _clean_result(payload, point.score, point.id)
+            cleaned = _clean_result(
+                payload,
+                point.score,
+                point.id,
+            )
+
             if not cleaned:
                 continue
 

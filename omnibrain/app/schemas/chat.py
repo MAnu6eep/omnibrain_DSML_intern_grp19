@@ -18,7 +18,7 @@ class ThoughtStep(BaseModel):
 class RetrievedTextChunk(BaseModel):
     chunk_id: str
     document: str = ""
-    page: int | str = 0
+    page: int = 0
     text: str = ""
     score: float = 0.0
     source: str = ""
@@ -43,3 +43,4 @@ class ChatResponse(BaseModel):
     retrieved_text: List[RetrievedTextChunk] = Field(default_factory=list)
     retrieved_images: List[RetrievedImage] = Field(default_factory=list)
     status: str = "completed"
+
