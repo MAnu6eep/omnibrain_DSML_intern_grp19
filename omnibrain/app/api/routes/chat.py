@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException
 from langchain_core.messages import HumanMessage
+from pydantic import BaseModel
 
 from omnibrain.agents.graph import app as graph_app
 from omnibrain.app.schemas.chat import (
@@ -11,7 +12,13 @@ from omnibrain.app.schemas.chat import (
 )
 
 router = APIRouter()
+class SQLChatRequest(BaseModel):
+    query: str
 
+
+class SQLChatResponse(BaseModel):
+    sql_query: str
+    status: str
 
 def _clean_text_results(results):
     cleaned = []
@@ -114,3 +121,16 @@ async def chat(request: ChatRequest):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+@router.post("/sql", response_model=SQLChatResponse)
+async def chat_sql(request: SQLChatRequest):
+    """
+    Internal endpoint for isolated Text-to-SQL testing.
+    Currently returns a scaffold SQL query.
+    """
+
+    sql_query = f"-- Generated SQL for: {request.query}"
+
+    return SQLChatResponse(
+        sql_query=sql_query,
+        status="success",
+    )
