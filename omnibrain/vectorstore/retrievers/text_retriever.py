@@ -34,15 +34,13 @@ def _clean_result(payload: dict[str, Any], score: float, point_id: Any) -> dict:
         "page": page_number,
         "text": text,
         "score": round(float(score), 4),
-        "source": payload.get(
-            "source",
-            payload.get("document", "")
-        ),
+        "source": payload.get("source", payload.get("document", "")),
         "modality": payload.get("modality", "text"),
         "metadata": {
             key: value
             for key, value in payload.items()
-            if key not in {
+            if key
+            not in {
                 "text",
                 "chunk_id",
                 "document",
@@ -58,30 +56,30 @@ def _clean_result(payload: dict[str, Any], score: float, point_id: Any) -> dict:
 def search_text_chunks(
     query: str,
     top_k: int = 5,
-    min_score: float = 0.40,
+    min_score: float = 0.20,
 ) -> list[dict]:
     """
     Search the text collection for the most similar chunks.
+    Deduplicates results by normalized text content to prevent duplicate temp file chunks.
     """
 
     try:
+        query_vector = list(get_embedding_model().embed([query]))[0]
 
-        query_vector = list(
-            get_embedding_model().embed([query])
-        )[0]
+        # Fetch candidate pool to allow text content deduplication
+        candidate_limit = max(top_k * 5, 30)
 
         response = get_client().query_points(
             collection_name=TEXT_COLLECTION,
             query=query_vector,
-            limit=top_k,
+            limit=candidate_limit,
             with_payload=True,
         )
 
         results = []
-        seen_chunk_ids = set()
+        seen_texts = set()
 
         for point in response.points:
-
             if point.score < min_score:
                 continue
 
@@ -96,11 +94,16 @@ def search_text_chunks(
             if not cleaned:
                 continue
 
-            if cleaned["chunk_id"] in seen_chunk_ids:
+            # Deduplicate by normalized text content (first 120 chars)
+            norm_text = cleaned["text"].strip().lower()[:120]
+            if norm_text in seen_texts:
                 continue
 
-            seen_chunk_ids.add(cleaned["chunk_id"])
+            seen_texts.add(norm_text)
             results.append(cleaned)
+
+            if len(results) >= top_k:
+                break
 
         return results
 

@@ -172,12 +172,25 @@ if user_query := st.chat_input("Ask a question about the document or architectur
 
             if response.status_code == 200:
                 data = response.json()
-                final_answer = data.get("response", "No response generated.")
+                final_answer = (data.get("response") or "").strip()
                 thought_steps = data.get("thought_process", [])
                 returned_images = data.get("images", [])
 
                 retrieved_text = data.get("retrieved_text", [])
                 retrieved_images = data.get("retrieved_images", [])
+
+                if not final_answer and retrieved_text:
+                    passages = [
+                        item.get("text", "")
+                        for item in retrieved_text
+                        if item.get("text")
+                    ]
+                    final_answer = (
+                        "\n\n".join(passages) if passages else "Execution completed."
+                    )
+
+                if not final_answer:
+                    final_answer = "Execution completed."
 
                 if data.get("status"):
                     status_container.write(f"Status: {data.get('status')}")

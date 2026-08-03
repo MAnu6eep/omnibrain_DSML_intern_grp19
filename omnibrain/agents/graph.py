@@ -1,26 +1,42 @@
-from langgraph.checkpoint.memory import MemorySaver
+import sys
+
 from langgraph.graph import END, StateGraph
 
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
+
+from omnibrain.agents.direct_llm.direct_llm import direct_llm_node
 from omnibrain.agents.generator.generator import generator_node
+from omnibrain.agents.sql_agent.sql_agent import sql_agent_node
 from omnibrain.agents.state.state import AgentState
 from omnibrain.agents.supervisor.supervisor import supervisor_node
 from omnibrain.agents.tools.web_search import execute_web_search
 from omnibrain.vectorstore.retrievers.image_retriever import search_images
 from omnibrain.vectorstore.retrievers.text_retriever import search_text_chunks
-from omnibrain.agents.direct_llm.direct_llm import direct_llm_node
+
+
+def _extract_query(state: AgentState) -> str:
+    messages = state.get("messages", [])
+    if not messages:
+        return ""
+    last_msg = messages[-1]
+    if hasattr(last_msg, "content"):
+        return (
+            last_msg.content
+            if isinstance(last_msg.content, str)
+            else str(last_msg.content)
+        )
+    elif isinstance(last_msg, dict):
+        return last_msg.get("content", "")
+    return str(last_msg)
+
 
 def text_agent_node(state: AgentState):
-    query = state["messages"][-1].content
-
-    print("QUERY:", query)
+    query = _extract_query(state)
 
     results = search_text_chunks(query)
 
-    print("=" * 80)
-    print("TEXT RETRIEVAL RESULTS")
-    print(results)
-    print("NUMBER OF RESULTS:", len(results))
-    print("=" * 80)
+    print(f"QUERY: {query} -> RETRIEVED {len(results)} CHUNKS FROM QDRANT")
 
     thought = {
         "agent": "Text Agent",
@@ -38,7 +54,7 @@ def text_agent_node(state: AgentState):
 
 
 def vision_agent_node(state: AgentState):
-    query = state["messages"][-1].content
+    query = _extract_query(state)
     results = search_images(query)
     thought = {
         "agent": "Vision Agent",
@@ -56,7 +72,7 @@ def vision_agent_node(state: AgentState):
 
 
 def web_agent_node(state: AgentState):
-    query = state["messages"][-1].content
+    query = _extract_query(state)
     results = execute_web_search(query)
     thought = {
         "agent": "Web Agent",
@@ -81,6 +97,7 @@ workflow = StateGraph(AgentState)
 
 workflow.add_node("supervisor", supervisor_node)
 workflow.add_node("text_agent", text_agent_node)
+workflow.add_node("sql_agent", sql_agent_node)
 workflow.add_node("vision_agent", vision_agent_node)
 workflow.add_node("web_agent", web_agent_node)
 workflow.add_node("generator", generator_node)
@@ -91,6 +108,7 @@ workflow.add_conditional_edges(
     route_next,
     {
         "text_agent": "text_agent",
+        "sql_agent": "sql_agent",
         "vision_agent": "vision_agent",
         "web_agent": "web_agent",
         "direct_llm": "direct_llm",
@@ -99,11 +117,10 @@ workflow.add_conditional_edges(
 )
 
 workflow.add_edge("text_agent", "generator")
+workflow.add_edge("sql_agent", "generator")
 workflow.add_edge("vision_agent", "generator")
 workflow.add_edge("web_agent", "generator")
 
 workflow.add_edge("generator", END)
 workflow.add_edge("direct_llm", END)
-##checkpointer = MemorySaver()
-#app = workflow.compile(checkpointer=checkpointer)
 app = workflow.compile()

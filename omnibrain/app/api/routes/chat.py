@@ -1,5 +1,3 @@
-
-
 from fastapi import APIRouter, HTTPException
 from langchain_core.messages import HumanMessage
 
@@ -72,6 +70,8 @@ def _clean_image_results(results):
         )
 
     return cleaned
+
+
 @router.post("", response_model=ChatResponse)
 async def chat(request: ChatRequest):
     try:
@@ -83,19 +83,32 @@ async def chat(request: ChatRequest):
             }
         )
 
+        messages = result.get("messages", [])
+        final_response = ""
+        if messages:
+            last_msg = messages[-1]
+            if hasattr(last_msg, "content"):
+                final_response = last_msg.content
+            elif isinstance(last_msg, dict):
+                final_response = last_msg.get("content", "")
+            else:
+                final_response = str(last_msg)
+
+        if not final_response:
+            final_response = result.get("response", "No response generated.")
+
+        # Extract image paths if available
+        retrieved_imgs = _clean_image_results(result.get("retrieved_images", []))
+        image_paths = [img.image_path for img in retrieved_imgs if img.image_path]
+
         return ChatResponse(
-            response=result.get("response", ""),
+            response=final_response,
             thought_process=[
-                ThoughtStep(**step)
-                for step in result.get("thought_process", [])
+                ThoughtStep(**step) for step in result.get("thought_process", [])
             ],
-            images=result.get("images", []),
-            retrieved_text=_clean_text_results(
-                result.get("retrieved_text", [])
-            ),
-            retrieved_images=_clean_image_results(
-                result.get("retrieved_images", [])
-            ),
+            images=image_paths,
+            retrieved_text=_clean_text_results(result.get("retrieved_text", [])),
+            retrieved_images=retrieved_imgs,
             status="completed",
         )
 
