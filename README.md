@@ -112,7 +112,8 @@ If ingestion starts to lag, reduce batch size before increasing chunk size or em
 - `omnibrain/vectorstore/` - Qdrant collections, indexers, and retrievers.
 - `frontend/streamlit/` - Streamlit chat and upload UI.
 - `scripts/validate_pipeline.py` - Local ingestion smoke test.
-
+Each folder has differnet and many files which work in a diffenent way.
+Database folder inside service now contains connection.py,postgress.y and sqlite.py for the sql commands to run on our project smoothly.
 ## Notes
 
 - The codebase targets Python 3.11 to keep the dependency set consistent across machines.
