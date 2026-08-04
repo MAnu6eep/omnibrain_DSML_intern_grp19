@@ -36,6 +36,28 @@ def _heuristic_route(query: str) -> tuple[str, str]:
     ):
         return "web_agent", "Heuristic routing selected the web agent."
 
+    if any(
+    term in query_lower
+    for term in (
+        "select",
+        "insert",
+        "update",
+        "delete",
+        "sql",
+        "database",
+        "table",
+        "count",
+        "average",
+        "sum",
+        "max",
+        "min",
+        "employee",
+        "customer",
+        "record",
+    )
+        ):
+        return "sql_agent", "Heuristic routing selected the SQL agent."
+
     return "text_agent", "Heuristic routing selected the text agent."
 
 
