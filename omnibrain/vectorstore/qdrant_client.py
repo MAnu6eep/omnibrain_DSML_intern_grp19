@@ -23,8 +23,10 @@ class QdrantClientWrapper:
                     settings, "qdrant_url", "http://localhost:6333"
                 )
 
-        if "omnibrain_vector_db" in self.url or self.url.endswith(":6333"):
-            if not os.path.exists("/.dockerenv") and "localhost" not in self.url:
+        if not os.path.exists("/.dockerenv") and not (
+            os.getenv("QDRANT_HOST") and os.getenv("QDRANT_PORT")
+        ):
+            if "omnibrain_vector_db" in self.url or "qdrant:6333" in self.url:
                 self.url = "http://localhost:6333"
 
         if self.api_key is None:

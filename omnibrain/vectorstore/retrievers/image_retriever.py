@@ -75,21 +75,23 @@ def search_images(query: str, top_k: int = 3) -> List[Dict]:
     embedding = embedding.squeeze().cpu().numpy().tolist()
 
     results = client.query_points(
-        collection_name=IMAGE_COLLECTION, query=embedding, limit=top_k
+        collection_name=IMAGE_COLLECTION, query=embedding, limit=max(top_k * 5, 20)
     )
 
     images = []
+    seen_paths = set()
 
     for hit in results.points:
-
         payload = hit.payload or {}
         image_path = payload.get("image_path")
 
-        if not image_path:
+        if not image_path or image_path in seen_paths:
             continue
 
         if not Path(image_path).exists():
             continue
+
+        seen_paths.add(image_path)
 
         images.append(
             {

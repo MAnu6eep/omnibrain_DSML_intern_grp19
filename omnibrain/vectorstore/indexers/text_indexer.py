@@ -56,9 +56,7 @@ def index_text_chunks(chunks: List[Any]) -> bool:
 
     for chunk_obj, text_str, vector in zip(chunks, text_strings, embeddings):
 
-        # -----------------------------
         # Object-based chunk
-        # -----------------------------
         if hasattr(chunk_obj, "metadata"):
 
             payload = {
@@ -70,17 +68,10 @@ def index_text_chunks(chunks: List[Any]) -> bool:
                     "document",
                     getattr(chunk_obj, "source", "Unknown Document"),
                 ),
-                "source": getattr(
-                    chunk_obj, "source", getattr(chunk_obj, "document", "")
-                ),
-                "source_path": getattr(chunk_obj, "source_path", ""),
-                "modality": getattr(chunk_obj, "modality", "text"),
                 **getattr(chunk_obj, "metadata", {}),
             }
 
-        # -----------------------------
         # Dictionary-based chunk
-        # -----------------------------
         elif isinstance(chunk_obj, dict):
 
             payload = {
@@ -97,9 +88,7 @@ def index_text_chunks(chunks: List[Any]) -> bool:
                 **chunk_obj.get("metadata", {}),
             }
 
-        # -----------------------------
         # Plain text
-        # -----------------------------
         else:
 
             payload = {

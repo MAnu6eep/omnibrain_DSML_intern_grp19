@@ -1,22 +1,11 @@
+import base64
 import os
+from pathlib import Path
 from typing import Any, Dict
 
-from langchain_core.messages import AIMessage
-from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_core.messages import AIMessage, HumanMessage
 
 from omnibrain.agents.state.state import AgentState
-
-
-def _get_llm():
-    api_key = os.getenv("GEMINI_API_KEY")
-    if not api_key:
-        return None
-
-    return ChatGoogleGenerativeAI(
-        model="gemini-3.6-flash",
-        google_api_key=api_key,
-        temperature=0,
-    )
 
 
 def _clean_text_results(results: list[dict]) -> list[dict]:
@@ -60,14 +49,23 @@ def _clean_image_results(results: list[dict]) -> list[dict]:
 def generator_node(state: AgentState) -> Dict[str, Any]:
     """
     Final generation node.
-    Takes retrieved text/images from previous agents and produces
-    the final AI response.
+    Takes retrieved text/images from previous agents and produces the final AI response.
     """
+    messages = state.get("messages", [])
+    user_query = ""
+    if messages:
+        last_msg = messages[-1]
+        if hasattr(last_msg, "content"):
+            user_query = (
+                last_msg.content
+                if isinstance(last_msg.content, str)
+                else str(last_msg.content)
+            )
+        elif isinstance(last_msg, dict):
+            user_query = last_msg.get("content", "")
+        else:
+            user_query = str(last_msg)
 
-    # Get the original user question
-    user_query = state["messages"][-1].content
-
-    # Retrieved context
     retrieved_text = _clean_text_results(state.get("retrieved_text", []))
     retrieved_images = _clean_image_results(state.get("retrieved_images", []))
 
@@ -123,40 +121,10 @@ def generator_node(state: AgentState) -> Dict[str, Any]:
 
     context = "\n\n".join(context_lines).strip()
 
-    llm = _get_llm()
-
-    if not context:
-        return {
-            "messages": [
-                AIMessage(
-                    content=(
-                        "I could not find useful indexed context for this "
-                        "question yet. Please upload or re-index a PDF and "
-                        "try again."
-                    )
-                )
-            ],
-            "thought_process": [
-                {
-                    "agent": "Generator",
-                    "action": (
-                        "No usable retrieval results were available; returned "
-                        "a safe fallback."
-                    ),
-                }
-            ],
-        }
-
-    # -------------------------
-    # Prompt
-    # -------------------------
-    prompt = f"""
+    prompt_text = f"""
 You are OmniBrain.
 
-Answer ONLY using the retrieved context below.
-
-If the context is insufficient, clearly state that the answer
-cannot be determined from the indexed documents.
+Answer the user's question using the relevant retrieved context below.
 
 Retrieved Context:
 
@@ -167,70 +135,46 @@ User Question:
 {user_query}
 """
 
-    # -------------------------
-    # LLM Generation
-    # -------------------------
-    if llm is None:
-        return {
-            "messages": [
-                AIMessage(
-                    content=(
-                        "The indexed context is available, but the Gemini "
-                        "API key is not configured on this machine. Configure "
-                        "GEMINI_API_KEY to enable LLM synthesis."
-                    )
+    message_content = [{"type": "text", "text": prompt_text}]
+
+    for img in retrieved_images:
+        img_path = img.get("image_path", "") if isinstance(img, dict) else str(img)
+        if img_path and os.path.exists(img_path):
+            try:
+                ext = Path(img_path).suffix.lstrip(".").lower() or "jpeg"
+                if ext == "jpg":
+                    ext = "jpeg"
+                with open(img_path, "rb") as image_file:
+                    b64_encoded = base64.b64encode(image_file.read()).decode("utf-8")
+                message_content.append(
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": f"data:image/{ext};base64,{b64_encoded}"},
+                    }
                 )
-            ],
-            "thought_process": [
-                {
-                    "agent": "Generator",
-                    "action": (
-                        "LLM synthesis skipped because GEMINI_API_KEY " "is missing."
-                    ),
-                }
-            ],
-        }
+            except Exception:
+                pass
+
+    prompt_payload = (
+        [HumanMessage(content=message_content)]
+        if len(message_content) > 1
+        else prompt_text
+    )
+
+    # -------------------------
+    # LLM Generation via Multi-Provider Manager
+    # -------------------------
+    from omnibrain.agents.llm import get_llm_response
 
     try:
-        response = llm.invoke(prompt)
-    except Exception as exc:
-        return {
-            "messages": [
-                AIMessage(
-                    content=(
-                        "The retrieval context was prepared, but the language "
-                        f"model call failed safely: {exc}"
-                    )
-                )
-            ],
-            "thought_process": [
-                {
-                    "agent": "Generator",
-                    "action": (
-                        "LLM synthesis failed and the node returned a " "safe fallback."
-                    ),
-                }
-            ],
-        }
-
-    if isinstance(response.content, str):
-        answer = response.content
-
-    elif isinstance(response.content, list):
-        answer = ""
-
-        for part in response.content:
-            if isinstance(part, dict):
-                answer += part.get("text", "")
-            else:
-                answer += str(part)
-
-    else:
-        answer = str(response.content)
+        answer, provider_used = get_llm_response(prompt_payload)
+    except Exception:
+        answer = f"Retrieved Context Summary:\n{context}"
+        provider_used = "Local Context Fallback"
 
     thought = {
         "agent": "Generator",
-        "action": "Synthesized final response from retrieved context.",
+        "action": f"Synthesized final response using {provider_used}.",
     }
 
     return {

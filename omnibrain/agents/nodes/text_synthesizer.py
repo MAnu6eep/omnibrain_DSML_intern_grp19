@@ -50,10 +50,8 @@ if __name__ == "__main__":
             "document": "AI_Book.pdf",
             "page": 5,
             "score": 0.95,
-            "text": (
-                "Retrieval-Augmented Generation combines retrieval "
-                "with language models."
-            ),
+            "text": "Artificial Intelligence is transforming healthcare."
+
         },
         {
             "chunk_id": "chunk_002",
@@ -66,4 +64,4 @@ if __name__ == "__main__":
 
     context = format_text_context(sample_results)
 
-    print(context)
+

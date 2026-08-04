@@ -19,13 +19,18 @@ def get_client():
 
 def _clean_result(payload: dict[str, Any], score: float, point_id: Any) -> dict:
     text = (payload.get("text") or "").strip()
+
     if not text:
         return {}
 
     page_number = payload.get("page_number", payload.get("page", 0))
+
     return {
         "chunk_id": payload.get("chunk_id", str(point_id)),
-        "document": payload.get("document", payload.get("source", "Unknown Document")),
+        "document": payload.get(
+            "document",
+            payload.get("source", "Unknown Document"),
+        ),
         "page": page_number,
         "text": text,
         "score": round(float(score), 4),
@@ -48,49 +53,57 @@ def _clean_result(payload: dict[str, Any], score: float, point_id: Any) -> dict:
     }
 
 
-def search_text_chunks(query: str, top_k: int = 5) -> list[dict]:
+def search_text_chunks(
+    query: str,
+    top_k: int = 5,
+    min_score: float = 0.20,
+) -> list[dict]:
     """
     Search the text collection for the most similar chunks.
-
-    Args:
-        query: User query.
-        top_k: Number of results to return.
-
-    Returns:
-        List of dictionaries containing text, metadata, chunk ID and score.
+    Deduplicates results by normalized text content to prevent duplicate temp file chunks.
     """
 
-    if not query or not query.strip():
-        return []
-
     try:
-        # Generate embedding for the query
         query_vector = list(get_embedding_model().embed([query]))[0]
 
-        # Perform similarity search
+        # Fetch candidate pool to allow text content deduplication
+        candidate_limit = max(top_k * 5, 30)
+
         response = get_client().query_points(
             collection_name=TEXT_COLLECTION,
             query=query_vector,
-            limit=top_k,
+            limit=candidate_limit,
             with_payload=True,
         )
 
         results = []
-        seen_chunk_ids = set()
+        seen_texts = set()
 
         for point in response.points:
+            if point.score < min_score:
+                continue
 
             payload = point.payload or {}
 
-            cleaned = _clean_result(payload, point.score, point.id)
+            cleaned = _clean_result(
+                payload,
+                point.score,
+                point.id,
+            )
+
             if not cleaned:
                 continue
 
-            if cleaned["chunk_id"] in seen_chunk_ids:
+            # Deduplicate by normalized text content (first 120 chars)
+            norm_text = cleaned["text"].strip().lower()[:120]
+            if norm_text in seen_texts:
                 continue
 
-            seen_chunk_ids.add(cleaned["chunk_id"])
+            seen_texts.add(norm_text)
             results.append(cleaned)
+
+            if len(results) >= top_k:
+                break
 
         return results
 

@@ -14,49 +14,78 @@ def _get_llm():
     if not api_key:
         return None
 
-    return ChatGoogleGenerativeAI(
-        model="gemini-3.6-flash",
-        google_api_key=api_key,
-        temperature=0,
-    )
+    model_name = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
+    try:
+        return ChatGoogleGenerativeAI(
+            model=model_name,
+            google_api_key=api_key,
+            temperature=0,
+            max_retries=0,
+        )
+    except Exception:
+        return None
 
 
 def _heuristic_route(query: str) -> tuple[str, str]:
     query_lower = query.lower()
 
+    # 1. Vision related queries (images, figures, diagrams, charts)
     if any(
         term in query_lower
-        for term in ("image", "figure", "diagram", "chart", "table", "visual")
+        for term in ("image", "figure", "diagram", "chart", "bar chart", "visual")
     ):
-        return "vision_agent", "Heuristic routing selected the vision agent."
+        return "vision_agent", "Visual figure/image query detected."
 
+    # 2. SQL related queries
     if any(
         term in query_lower
-        for term in ("web", "internet", "search", "latest", "current")
+        for term in (
+            "sql",
+            "sql query",
+            "table query",
+            "select ",
+            "from metrics",
+            "sqlite",
+            "relational database",
+        )
+    ):
+        return "sql_agent", "Structured SQL database query detected."
+
+    # 3. Document / Vector DB related queries
+    document_keywords = [
+        "pdf",
+        "document",
+        "file",
+        "page",
+        "chapter",
+        "chunk",
+        "upload",
+        "uploaded",
+        "summary",
+        "summarize",
+        "vector database",
+        "vector db",
+        "qdrant",
+        "vector",
+    ]
+
+    if any(keyword in query_lower for keyword in document_keywords):
+        return "text_agent", "Document vector query detected."
+
+    # 4. Web related queries
+    if any(
+        term in query_lower
+        for term in (
+            "web",
+            "internet",
+            "search the web",
+            "web search",
+            "latest news",
+            "current news",
+            "online search",
+        )
     ):
         return "web_agent", "Heuristic routing selected the web agent."
-
-    if any(
-    term in query_lower
-    for term in (
-        "select",
-        "insert",
-        "update",
-        "delete",
-        "sql",
-        "database",
-        "table",
-        "count",
-        "average",
-        "sum",
-        "max",
-        "min",
-        "employee",
-        "customer",
-        "record",
-    )
-        ):
-        return "sql_agent", "Heuristic routing selected the SQL agent."
 
     return "text_agent", "Heuristic routing selected the text agent."
 
@@ -67,7 +96,19 @@ def supervisor_node(state: AgentState) -> Dict[str, Any]:
     which worker agent should handle the query next.
     """
     messages = state.get("messages", [])
-    query = messages[-1].content if messages else ""
+    query = ""
+    if messages:
+        last_msg = messages[-1]
+        if hasattr(last_msg, "content"):
+            query = (
+                last_msg.content
+                if isinstance(last_msg.content, str)
+                else str(last_msg.content)
+            )
+        elif isinstance(last_msg, dict):
+            query = last_msg.get("content", "")
+        else:
+            query = str(last_msg)
 
     llm = _get_llm()
 
@@ -102,7 +143,7 @@ def supervisor_node(state: AgentState) -> Dict[str, Any]:
         content = content.replace("```", "").strip()
 
         decision = json.loads(content)
-        next_node = decision.get("next_node", "text_agent")
+        next_node = decision.get("next_node", "direct_llm")
         thought = decision.get("thought", "Routing request...")
     except Exception:
         next_node, thought = _heuristic_route(query)

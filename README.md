@@ -26,7 +26,7 @@ pip install -r requirements.txt
 
 ## Recommended local run procedure
 
-1. Start Qdrant.
+1. Start Qdrant.(open docker before hand to avoid errors)
 
 ```bash
 docker compose up -d qdrant
