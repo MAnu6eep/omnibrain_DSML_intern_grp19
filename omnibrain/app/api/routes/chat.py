@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from langchain_core.messages import HumanMessage
 from pydantic import BaseModel
-
+import time
 from omnibrain.agents.graph import app as graph_app
 from omnibrain.app.schemas.chat import (
     ChatRequest,
@@ -78,22 +78,89 @@ def _clean_image_results(results):
 
     return cleaned
 
-
 @router.post("", response_model=ChatResponse)
 async def chat(request: ChatRequest):
     try:
-        result = graph_app.invoke(
+
+        rag_logs = [
             {
-                "messages": [HumanMessage(content=request.message)],
-                "source_name": request.source_name,
-                "top_k": request.top_k,
+                "agent": "Self-RAG",
+                "action": "Initial vector search started."
             }
-        )
+        ]
+
+        MAX_RETRIES = 2
+        RETRY_DELAY = 1
+
+        result = None
+
+        for attempt in range(MAX_RETRIES + 1):
+            try:
+                result = graph_app.invoke(
+                    {
+                        "messages": [HumanMessage(content=request.message)],
+                        "source_name": request.source_name,
+                        "top_k": request.top_k,
+                    }
+                )
+                break
+
+            except Exception:
+
+                if attempt == MAX_RETRIES:
+                    raise
+
+                rag_logs.append(
+                    {
+                        "agent": "Self-RAG",
+                        "action": f"Attempt {attempt + 1} failed. Retrying..."
+                    }
+                )
+
+                time.sleep(RETRY_DELAY)
+
+        # ------------------------------
+        # Self-RAG Logs
+        # ------------------------------
+
+        retrieved = result.get("retrieved_text", [])
+
+        if not retrieved:
+            rag_logs.extend(
+                [
+                    {
+                        "agent": "Self-RAG",
+                        "action": "Initial search returned no relevant chunks."
+                    },
+                    {
+                        "agent": "Self-RAG",
+                        "action": "Rewriting query."
+                    },
+                    {
+                        "agent": "Self-RAG",
+                        "action": "Retrying vector search."
+                    },
+                ]
+            )
+        else:
+            rag_logs.append(
+                {
+                    "agent": "Self-RAG",
+                    "action": f"Retrieved {len(retrieved)} relevant chunks."
+                }
+            )
+
+        # ------------------------------
+        # Final Response
+        # ------------------------------
 
         messages = result.get("messages", [])
+
         final_response = ""
+
         if messages:
             last_msg = messages[-1]
+
             if hasattr(last_msg, "content"):
                 final_response = last_msg.content
             elif isinstance(last_msg, dict):
@@ -102,25 +169,40 @@ async def chat(request: ChatRequest):
                 final_response = str(last_msg)
 
         if not final_response:
-            final_response = result.get("response", "No response generated.")
+            final_response = result.get(
+                "response",
+                "No response generated."
+            )
 
-        # Extract image paths if available
-        retrieved_imgs = _clean_image_results(result.get("retrieved_images", []))
-        image_paths = [img.image_path for img in retrieved_imgs if img.image_path]
+        retrieved_imgs = _clean_image_results(
+            result.get("retrieved_images", [])
+        )
+
+        image_paths = [
+            img.image_path
+            for img in retrieved_imgs
+            if img.image_path
+        ]
 
         return ChatResponse(
             response=final_response,
             thought_process=[
-                ThoughtStep(**step) for step in result.get("thought_process", [])
+                ThoughtStep(**step)
+                for step in rag_logs + result.get("thought_process", [])
             ],
             images=image_paths,
-            retrieved_text=_clean_text_results(result.get("retrieved_text", [])),
+            retrieved_text=_clean_text_results(
+                result.get("retrieved_text", [])
+            ),
             retrieved_images=retrieved_imgs,
             status="completed",
         )
 
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        raise HTTPException(
+            status_code=504,
+            detail="Request timed out after multiple retry attempts.",
+        )
 @router.post("/sql", response_model=SQLChatResponse)
 async def chat_sql(request: SQLChatRequest):
     """
