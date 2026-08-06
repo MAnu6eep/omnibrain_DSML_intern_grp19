@@ -2,6 +2,8 @@ from fastapi import APIRouter, HTTPException
 from langchain_core.messages import HumanMessage
 from pydantic import BaseModel
 import time
+import logging
+
 from omnibrain.agents.graph import app as graph_app
 from omnibrain.app.schemas.chat import (
     ChatRequest,
@@ -11,7 +13,11 @@ from omnibrain.app.schemas.chat import (
     ThoughtStep,
 )
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter()
+
+
 class SQLChatRequest(BaseModel):
     query: str
 
@@ -19,6 +25,7 @@ class SQLChatRequest(BaseModel):
 class SQLChatResponse(BaseModel):
     sql_query: str
     status: str
+
 
 def _clean_text_results(results):
     cleaned = []
@@ -35,6 +42,7 @@ def _clean_text_results(results):
             continue
 
         seen.add(chunk_id)
+
         cleaned.append(
             RetrievedTextChunk(
                 chunk_id=chunk_id,
@@ -60,10 +68,12 @@ def _clean_image_results(results):
             continue
 
         image_path = (item.get("image_path") or "").strip()
+
         if not image_path or image_path in seen:
             continue
 
         seen.add(image_path)
+
         cleaned.append(
             RetrievedImage(
                 image_path=image_path,
@@ -78,8 +88,12 @@ def _clean_image_results(results):
 
     return cleaned
 
+
 @router.post("", response_model=ChatResponse)
 async def chat(request: ChatRequest):
+
+    logger.info("Received chat request")
+
     try:
 
         rag_logs = [
@@ -95,7 +109,9 @@ async def chat(request: ChatRequest):
         result = None
 
         for attempt in range(MAX_RETRIES + 1):
+
             try:
+
                 result = graph_app.invoke(
                     {
                         "messages": [HumanMessage(content=request.message)],
@@ -103,6 +119,7 @@ async def chat(request: ChatRequest):
                         "top_k": request.top_k,
                     }
                 )
+
                 break
 
             except Exception:
@@ -117,15 +134,22 @@ async def chat(request: ChatRequest):
                     }
                 )
 
-                time.sleep(RETRY_DELAY)
+                logger.warning(
+                    "Retry %d triggered for chat request",
+                    attempt + 1,
+                )
 
-        # ------------------------------
-        # Self-RAG Logs
-        # ------------------------------
+                time.sleep(RETRY_DELAY)
 
         retrieved = result.get("retrieved_text", [])
 
+        logger.info(
+            "Retrieved %d text chunks",
+            len(retrieved),
+        )
+
         if not retrieved:
+
             rag_logs.extend(
                 [
                     {
@@ -142,7 +166,9 @@ async def chat(request: ChatRequest):
                     },
                 ]
             )
+
         else:
+
             rag_logs.append(
                 {
                     "agent": "Self-RAG",
@@ -150,25 +176,25 @@ async def chat(request: ChatRequest):
                 }
             )
 
-        # ------------------------------
-        # Final Response
-        # ------------------------------
-
         messages = result.get("messages", [])
 
         final_response = ""
 
         if messages:
+
             last_msg = messages[-1]
 
             if hasattr(last_msg, "content"):
                 final_response = last_msg.content
+
             elif isinstance(last_msg, dict):
                 final_response = last_msg.get("content", "")
+
             else:
                 final_response = str(last_msg)
 
         if not final_response:
+
             final_response = result.get(
                 "response",
                 "No response generated."
@@ -183,6 +209,8 @@ async def chat(request: ChatRequest):
             for img in retrieved_imgs
             if img.image_path
         ]
+
+        logger.info("Chat request completed successfully")
 
         return ChatResponse(
             response=final_response,
@@ -199,16 +227,22 @@ async def chat(request: ChatRequest):
         )
 
     except Exception:
+
+        logger.exception("Chat pipeline failed")
+
         raise HTTPException(
             status_code=504,
-            detail="Request timed out after multiple retry attempts.",
+            detail="Request timed out after multiple retry attempts."
         )
+
+
 @router.post("/sql", response_model=SQLChatResponse)
 async def chat_sql(request: SQLChatRequest):
     """
     Internal endpoint for isolated Text-to-SQL testing.
-    Currently returns a scaffold SQL query.
     """
+
+    logger.info("Received SQL chat request")
 
     sql_query = f"-- Generated SQL for: {request.query}"
 
