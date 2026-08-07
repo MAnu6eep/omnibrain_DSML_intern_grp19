@@ -93,7 +93,7 @@ def web_agent_node(state: AgentState):
 def sql_agent_node(state: AgentState):
     statement = state["messages"][-1].content
 
-    result = sql_agent.execute(state, statement)
+    result = sql_agent.execute(statement)
 
     thought = {
         "agent": "SQL Agent",
@@ -117,7 +117,6 @@ workflow.add_node("text_agent", text_agent_node)
 workflow.add_node("sql_agent", sql_agent_node)
 workflow.add_node("vision_agent", vision_agent_node)
 workflow.add_node("web_agent", web_agent_node)
-workflow.add_node("sql_agent", sql_agent_node)
 workflow.add_node("generator", generator_node)
 workflow.add_node("direct_llm", direct_llm_node)
 workflow.set_entry_point("supervisor")
@@ -137,7 +136,6 @@ workflow.add_edge("text_agent", "generator")
 workflow.add_edge("sql_agent", "generator")
 workflow.add_edge("vision_agent", "generator")
 workflow.add_edge("web_agent", "generator")
-workflow.add_edge("sql_agent", "generator")
 
 workflow.add_edge("generator", END)
 workflow.add_edge("direct_llm", END)

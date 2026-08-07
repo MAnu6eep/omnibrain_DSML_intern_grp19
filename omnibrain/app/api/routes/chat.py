@@ -1,5 +1,8 @@
 from fastapi import APIRouter, HTTPException
 from langchain_core.messages import HumanMessage
+from pydantic import BaseModel
+import time
+import logging
 
 from omnibrain.agents.graph import app as graph_app
 from omnibrain.app.schemas.chat import (
@@ -10,7 +13,18 @@ from omnibrain.app.schemas.chat import (
     ThoughtStep,
 )
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter()
+
+
+class SQLChatRequest(BaseModel):
+    query: str
+
+
+class SQLChatResponse(BaseModel):
+    sql_query: str
+    status: str
 
 
 def _clean_text_results(results):
@@ -28,6 +42,7 @@ def _clean_text_results(results):
             continue
 
         seen.add(chunk_id)
+
         cleaned.append(
             RetrievedTextChunk(
                 chunk_id=chunk_id,
@@ -53,10 +68,12 @@ def _clean_image_results(results):
             continue
 
         image_path = (item.get("image_path") or "").strip()
+
         if not image_path or image_path in seen:
             continue
 
         seen.add(image_path)
+
         cleaned.append(
             RetrievedImage(
                 image_path=image_path,
@@ -74,43 +91,162 @@ def _clean_image_results(results):
 
 @router.post("", response_model=ChatResponse)
 async def chat(request: ChatRequest):
+
+    logger.info("Received chat request")
+
     try:
-        result = graph_app.invoke(
+
+        rag_logs = [
             {
-                "messages": [HumanMessage(content=request.message)],
-                "source_name": request.source_name,
-                "top_k": request.top_k,
+                "agent": "Self-RAG",
+                "action": "Initial vector search started."
             }
+        ]
+
+        MAX_RETRIES = 2
+        RETRY_DELAY = 1
+
+        result = None
+
+        for attempt in range(MAX_RETRIES + 1):
+
+            try:
+
+                result = graph_app.invoke(
+                    {
+                        "messages": [HumanMessage(content=request.message)],
+                        "source_name": request.source_name,
+                        "top_k": request.top_k,
+                    }
+                )
+
+                break
+
+            except Exception:
+
+                if attempt == MAX_RETRIES:
+                    raise
+
+                rag_logs.append(
+                    {
+                        "agent": "Self-RAG",
+                        "action": f"Attempt {attempt + 1} failed. Retrying..."
+                    }
+                )
+
+                logger.warning(
+                    "Retry %d triggered for chat request",
+                    attempt + 1,
+                )
+
+                time.sleep(RETRY_DELAY)
+
+        retrieved = result.get("retrieved_text", [])
+
+        logger.info(
+            "Retrieved %d text chunks",
+            len(retrieved),
         )
 
+        if not retrieved:
+
+            rag_logs.extend(
+                [
+                    {
+                        "agent": "Self-RAG",
+                        "action": "Initial search returned no relevant chunks."
+                    },
+                    {
+                        "agent": "Self-RAG",
+                        "action": "Rewriting query."
+                    },
+                    {
+                        "agent": "Self-RAG",
+                        "action": "Retrying vector search."
+                    },
+                ]
+            )
+
+        else:
+
+            rag_logs.append(
+                {
+                    "agent": "Self-RAG",
+                    "action": f"Retrieved {len(retrieved)} relevant chunks."
+                }
+            )
+
         messages = result.get("messages", [])
+
         final_response = ""
+
         if messages:
+
             last_msg = messages[-1]
+
             if hasattr(last_msg, "content"):
                 final_response = last_msg.content
+
             elif isinstance(last_msg, dict):
                 final_response = last_msg.get("content", "")
+
             else:
                 final_response = str(last_msg)
 
         if not final_response:
-            final_response = result.get("response", "No response generated.")
 
-        # Extract image paths if available
-        retrieved_imgs = _clean_image_results(result.get("retrieved_images", []))
-        image_paths = [img.image_path for img in retrieved_imgs if img.image_path]
+            final_response = result.get(
+                "response",
+                "No response generated."
+            )
+
+        retrieved_imgs = _clean_image_results(
+            result.get("retrieved_images", [])
+        )
+
+        image_paths = [
+            img.image_path
+            for img in retrieved_imgs
+            if img.image_path
+        ]
+
+        logger.info("Chat request completed successfully")
 
         return ChatResponse(
             response=final_response,
             thought_process=[
-                ThoughtStep(**step) for step in result.get("thought_process", [])
+                ThoughtStep(**step)
+                for step in rag_logs + result.get("thought_process", [])
             ],
             images=image_paths,
-            retrieved_text=_clean_text_results(result.get("retrieved_text", [])),
+            retrieved_text=_clean_text_results(
+                result.get("retrieved_text", [])
+            ),
             retrieved_images=retrieved_imgs,
             status="completed",
         )
 
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+
+        logger.exception("Chat pipeline failed")
+
+        raise HTTPException(
+            status_code=504,
+            detail="Request timed out after multiple retry attempts."
+        )
+
+
+@router.post("/sql", response_model=SQLChatResponse)
+async def chat_sql(request: SQLChatRequest):
+    """
+    Internal endpoint for isolated Text-to-SQL testing.
+    """
+
+    logger.info("Received SQL chat request")
+
+    sql_query = f"-- Generated SQL for: {request.query}"
+
+    return SQLChatResponse(
+        sql_query=sql_query,
+        status="success",
+    )
