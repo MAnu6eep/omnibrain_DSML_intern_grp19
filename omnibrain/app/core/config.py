@@ -6,6 +6,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     app_name: str = "OmniBrain"
     app_env: str = "development"
+    gemini_api_key: str = ""
     openai_api_key: str = ""
     qdrant_url: str = "http://localhost:6333"
     qdrant_api_key: str = ""

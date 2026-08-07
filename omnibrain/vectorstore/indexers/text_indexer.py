@@ -23,7 +23,7 @@ def _ensure_collection_exists(client):
         client.create_collection(
             collection_name=TEXT_COLLECTION,
             vectors_config=VectorParams(
-                size=384,  # BAAI/bge-small-en-v1.5 vector dimension
+                size=384,
                 distance=Distance.COSINE,
             ),
         )
@@ -31,11 +31,14 @@ def _ensure_collection_exists(client):
 
 def index_text_chunks(chunks: List[Any]) -> bool:
     """Generate BGE embeddings and upsert into the Qdrant text collection."""
+
     if not chunks:
         return False
 
     client = QdrantClientWrapper().client()
+
     _ensure_collection_exists(client)
+
     model = get_embedding_model()
 
     text_strings = [
@@ -48,25 +51,53 @@ def index_text_chunks(chunks: List[Any]) -> bool:
     ]
 
     embeddings = list(model.embed(text_strings))
+
     points = []
 
     for chunk_obj, text_str, vector in zip(chunks, text_strings, embeddings):
+
+        # Object-based chunk
         if hasattr(chunk_obj, "metadata"):
+
             payload = {
                 "text": text_str,
                 "page_number": getattr(chunk_obj, "page_number", 1),
                 "chunk_id": getattr(chunk_obj, "chunk_id", str(uuid4())),
+                "document": getattr(
+                    chunk_obj,
+                    "document",
+                    getattr(chunk_obj, "source", "Unknown Document"),
+                ),
                 **getattr(chunk_obj, "metadata", {}),
             }
+
+        # Dictionary-based chunk
         elif isinstance(chunk_obj, dict):
+
             payload = {
                 "text": text_str,
                 "page_number": chunk_obj.get("page_number", 1),
                 "chunk_id": chunk_obj.get("chunk_id", str(uuid4())),
+                "document": chunk_obj.get(
+                    "document",
+                    chunk_obj.get("source", "Unknown Document"),
+                ),
+                "source": chunk_obj.get("source", chunk_obj.get("document", "")),
+                "source_path": chunk_obj.get("source_path", ""),
+                "modality": chunk_obj.get("modality", "text"),
                 **chunk_obj.get("metadata", {}),
             }
+
+        # Plain text
         else:
-            payload = {"text": text_str}
+
+            payload = {
+                "text": text_str,
+                "page_number": 1,
+                "chunk_id": str(uuid4()),
+                "document": "Unknown Document",
+                "modality": "text",
+            }
 
         points.append(
             PointStruct(

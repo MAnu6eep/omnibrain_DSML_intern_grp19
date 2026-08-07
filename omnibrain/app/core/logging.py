@@ -1,7 +1,7 @@
+import functools
+import logging
 import sys
 import time
-import logging
-import functools
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
@@ -10,10 +10,11 @@ LOG_DIR = Path("logs")
 LOG_DIR.mkdir(exist_ok=True)
 LOG_FILE = LOG_DIR / "omnibrain_backend.log"
 
+
 def setup_logging(log_level: str = "INFO") -> logging.Logger:
     logger = logging.getLogger("omnibrain")
     logger.setLevel(log_level)
-    
+
     if logger.handlers:
         return logger
 
@@ -29,20 +30,25 @@ def setup_logging(log_level: str = "INFO") -> logging.Logger:
     file_handler = RotatingFileHandler(
         LOG_FILE, maxBytes=5_000_000, backupCount=3, encoding="utf-8"
     )
-    file_formatter = logging.Formatter(
-        '{"timestamp": "%(asctime)s", "level": "%(levelname)s", "origin": "%(filename)s:%(lineno)d", "message": "%(message)s"}'
+    file_fmt = (
+        '{"timestamp": "%(asctime)s", "level": "%(levelname)s", '
+        '"origin": "%(filename)s:%(lineno)d", "message": "%(message)s"}'
     )
+    file_formatter = logging.Formatter(file_fmt)
     file_handler.setFormatter(file_formatter)
     logger.addHandler(file_handler)
 
     return logger
 
+
 # Global logger instance
 logger = setup_logging()
 
+
 # Performance Telemetry Decorator
 def time_execution(stage_name: str):
-    """Decorator to log processing duration of functions (e.g., parsing, vectorization)."""
+    """Decorator to log processing duration of functions."""
+
     def decorator(func):
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
@@ -54,7 +60,12 @@ def time_execution(stage_name: str):
                 return result
             except Exception as e:
                 duration = time.perf_counter() - start_time
-                logger.error(f"EXCEPTION: [{stage_name}] failed after {duration:.4f}s with error: {str(e)}")
+                logger.error(
+                    f"EXCEPTION: [{stage_name}] failed after {duration:.4f}s "
+                    f"with error: {e}"
+                )
                 raise e
+
         return wrapper
+
     return decorator

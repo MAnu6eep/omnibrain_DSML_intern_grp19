@@ -1,4 +1,4 @@
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from pydantic import BaseModel, Field
 
@@ -36,6 +36,9 @@ class TextChunk(BaseModel):
         ..., description="The page number where this chunk resides"
     )
     text: str = Field(..., description="The chunked text snippet")
+    source: str = Field(default="", description="Original source file name")
+    source_path: str = Field(default="", description="Original source file path")
+    modality: str = Field(default="text", description="Content modality")
     metadata: Dict[str, Any] = Field(
         default_factory=dict, description="Source PDF name, overlap markers, etc."
     )
@@ -49,3 +52,14 @@ class IngestionResponse(BaseModel):
     text_chunks: int
     images_extracted: int
     message: str
+    warnings: List[str] = Field(default_factory=list)
+
+
+class UploadResponse(BaseModel):
+    upload_id: str
+    status: str = "processing"
+    pages: int = 0
+    text_chunks: int = 0
+    images: int = 0
+    message: str = ""
+    warnings: List[str] = Field(default_factory=list)
