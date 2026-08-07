@@ -115,8 +115,38 @@ def generator_node(state: AgentState) -> Dict[str, Any]:
 
         src = source or "Unknown"
         cap = caption or "No caption available."
+        chart_type = img.get("chart_type", "")
+        title = img.get("title", "")
+        summary = img.get("summary", "")
+
+        values = img.get("values", [])
+
+        value_lines = []
+
+        for item in values:
+            value_lines.append(
+                f"{item.get('label', '')} = {item.get('value', '')}"
+            )
+
         context_lines.append(
-            f"[Image | Source: {src} | Page: {page} | Path: {image_path}] {cap}"
+            f"""
+        [Vision | Source: {src} | Page: {page}]
+
+        Caption:
+        {cap}
+
+        Chart Type:
+        {chart_type}
+
+        Title:
+        {title}
+
+        Extracted Values:
+        {chr(10).join(value_lines)}
+
+        Summary:
+        {summary}
+        """.strip()
         )
 
     context = "\n\n".join(context_lines).strip()
