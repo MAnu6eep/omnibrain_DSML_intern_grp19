@@ -91,8 +91,23 @@ def _clean_image_results(results):
 
 @router.post("", response_model=ChatResponse)
 async def chat(request: ChatRequest):
-
     logger.info("Received chat request")
+
+    # ------------------------------
+    # Request Validation
+    # ------------------------------
+
+    if not request.message or not request.message.strip():
+        raise HTTPException(
+            status_code=422,
+            detail="Message cannot be empty."
+        )
+
+    if request.top_k < 1 or request.top_k > 20:
+        raise HTTPException(
+            status_code=422,
+            detail="top_k must be between 1 and 20."
+        )
 
     try:
 
@@ -226,14 +241,16 @@ async def chat(request: ChatRequest):
             status="completed",
         )
 
-    except Exception:
+    except HTTPException:
+     raise
 
-        logger.exception("Chat pipeline failed")
+    except Exception as e:
+        logger.exception("Chat pipeline failed: %s", e)
 
-        raise HTTPException(
-            status_code=504,
-            detail="Request timed out after multiple retry attempts."
-        )
+    raise HTTPException(
+        status_code=500,
+        detail="Chat pipeline failed after multiple retry attempts."
+    )
 
 
 @router.post("/sql", response_model=SQLChatResponse)
