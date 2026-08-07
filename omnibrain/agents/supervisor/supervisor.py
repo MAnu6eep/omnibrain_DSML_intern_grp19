@@ -85,10 +85,9 @@ def _heuristic_route(query: str) -> tuple[str, str]:
             "online search",
         )
     ):
-        return "web_agent", "Public web search query detected."
+        return "web_agent", "Heuristic routing selected the web agent."
 
-    # Everything else goes directly to Gemini
-    return "direct_llm", "General query detected."
+    return "text_agent", "Heuristic routing selected the text agent."
 
 
 def supervisor_node(state: AgentState) -> Dict[str, Any]:

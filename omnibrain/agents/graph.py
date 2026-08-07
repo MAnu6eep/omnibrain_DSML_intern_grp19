@@ -24,6 +24,8 @@ from omnibrain.agents.tools.web_search import execute_web_search
 
 from omnibrain.vectorstore.retrievers.image_retriever import search_images
 from omnibrain.vectorstore.retrievers.text_retriever import search_text_chunks
+from omnibrain.agents.sql_agent.sql_agent import SQLAgent
+sql_agent = SQLAgent()
 
 
 # -----------------------------
@@ -191,6 +193,21 @@ def web_agent_node(state: AgentState):
         ],
     }
 
+def sql_agent_node(state: AgentState):
+    statement = state["messages"][-1].content
+
+    result = sql_agent.execute(statement)
+
+    thought = {
+        "agent": "SQL Agent",
+        "action": "Generated SQL query."
+    }
+
+    return {
+        "sql_result": result,
+        "next_node": "FINISH",
+        "thought_process": [thought],
+    }
 
 
 # -----------------------------
@@ -315,7 +332,9 @@ workflow.add_conditional_edges(
 
         "web_agent": "web_agent",
 
+
         "direct_llm": "direct_llm",
+
 
         "FINISH": END,
     },
