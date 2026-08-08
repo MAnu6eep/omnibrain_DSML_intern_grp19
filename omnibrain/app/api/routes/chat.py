@@ -91,6 +91,8 @@ def _clean_image_results(results):
 
 @router.post("", response_model=ChatResponse)
 async def chat(request: ChatRequest):
+    start_time = time.perf_counter()
+
     logger.info("Received chat request")
 
     # ------------------------------
@@ -225,8 +227,13 @@ async def chat(request: ChatRequest):
             if img.image_path
         ]
 
-        logger.info("Chat request completed successfully")
+        
+        execution_time = time.perf_counter() - start_time
 
+        logger.info(
+            "Chat request completed successfully in %.3f seconds",
+            execution_time,
+        )
         return ChatResponse(
             response=final_response,
             thought_process=[
@@ -245,12 +252,18 @@ async def chat(request: ChatRequest):
      raise
 
     except Exception as e:
-        logger.exception("Chat pipeline failed: %s", e)
+        execution_time = time.perf_counter() - start_time
 
-    raise HTTPException(
-        status_code=500,
-        detail="Chat pipeline failed after multiple retry attempts."
-    )
+        logger.exception(
+            "Chat pipeline failed after %.3f seconds: %s",
+            execution_time,
+            e,
+        )
+
+        raise HTTPException(
+            status_code=500,
+            detail="Chat pipeline failed after multiple retry attempts.",
+        )
 
 
 @router.post("/sql", response_model=SQLChatResponse)
