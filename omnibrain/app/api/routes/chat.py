@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException
 from langchain_core.messages import HumanMessage
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 import time
 import logging
 
@@ -19,7 +19,12 @@ router = APIRouter()
 
 
 class SQLChatRequest(BaseModel):
-    query: str
+    query: str = Field(
+        ...,
+        min_length=1,
+        max_length=500,
+        description="Natural-language query for SQL generation",
+    )
 
 
 class SQLChatResponse(BaseModel):
@@ -102,21 +107,20 @@ async def chat(request: ChatRequest):
     if not request.message or not request.message.strip():
         raise HTTPException(
             status_code=422,
-            detail="Message cannot be empty."
+            detail="Message cannot be empty.",
         )
 
     if request.top_k < 1 or request.top_k > 20:
         raise HTTPException(
             status_code=422,
-            detail="top_k must be between 1 and 20."
+            detail="top_k must be between 1 and 20.",
         )
 
     try:
-
         rag_logs = [
             {
                 "agent": "Self-RAG",
-                "action": "Initial vector search started."
+                "action": "Initial vector search started.",
             }
         ]
 
@@ -126,12 +130,12 @@ async def chat(request: ChatRequest):
         result = None
 
         for attempt in range(MAX_RETRIES + 1):
-
             try:
-
                 result = graph_app.invoke(
                     {
-                        "messages": [HumanMessage(content=request.message)],
+                        "messages": [
+                            HumanMessage(content=request.message)
+                        ],
                         "source_name": request.source_name,
                         "top_k": request.top_k,
                     }
@@ -140,14 +144,16 @@ async def chat(request: ChatRequest):
                 break
 
             except Exception:
-
                 if attempt == MAX_RETRIES:
                     raise
 
                 rag_logs.append(
                     {
                         "agent": "Self-RAG",
-                        "action": f"Attempt {attempt + 1} failed. Retrying..."
+                        "action": (
+                            f"Attempt {attempt + 1} failed. "
+                            "Retrying..."
+                        ),
                     }
                 )
 
@@ -166,30 +172,34 @@ async def chat(request: ChatRequest):
         )
 
         if not retrieved:
-
             rag_logs.extend(
                 [
                     {
                         "agent": "Self-RAG",
-                        "action": "Initial search returned no relevant chunks."
+                        "action": (
+                            "Initial search returned "
+                            "no relevant chunks."
+                        ),
                     },
                     {
                         "agent": "Self-RAG",
-                        "action": "Rewriting query."
+                        "action": "Rewriting query.",
                     },
                     {
                         "agent": "Self-RAG",
-                        "action": "Retrying vector search."
+                        "action": "Retrying vector search.",
                     },
                 ]
             )
 
         else:
-
             rag_logs.append(
                 {
                     "agent": "Self-RAG",
-                    "action": f"Retrieved {len(retrieved)} relevant chunks."
+                    "action": (
+                        f"Retrieved {len(retrieved)} "
+                        "relevant chunks."
+                    ),
                 }
             )
 
@@ -198,7 +208,6 @@ async def chat(request: ChatRequest):
         final_response = ""
 
         if messages:
-
             last_msg = messages[-1]
 
             if hasattr(last_msg, "content"):
@@ -211,10 +220,9 @@ async def chat(request: ChatRequest):
                 final_response = str(last_msg)
 
         if not final_response:
-
             final_response = result.get(
                 "response",
-                "No response generated."
+                "No response generated.",
             )
 
         retrieved_imgs = _clean_image_results(
@@ -227,18 +235,20 @@ async def chat(request: ChatRequest):
             if img.image_path
         ]
 
-        
         execution_time = time.perf_counter() - start_time
 
         logger.info(
             "Chat request completed successfully in %.3f seconds",
             execution_time,
         )
+
         return ChatResponse(
             response=final_response,
             thought_process=[
                 ThoughtStep(**step)
-                for step in rag_logs + result.get("thought_process", [])
+                for step in (
+                    rag_logs + result.get("thought_process", [])
+                )
             ],
             images=image_paths,
             retrieved_text=_clean_text_results(
@@ -249,7 +259,7 @@ async def chat(request: ChatRequest):
         )
 
     except HTTPException:
-     raise
+        raise
 
     except Exception as e:
         execution_time = time.perf_counter() - start_time
@@ -262,7 +272,10 @@ async def chat(request: ChatRequest):
 
         raise HTTPException(
             status_code=500,
-            detail="Chat pipeline failed after multiple retry attempts.",
+            detail=(
+                "Chat pipeline failed after multiple "
+                "retry attempts."
+            ),
         )
 
 
@@ -272,9 +285,22 @@ async def chat_sql(request: SQLChatRequest):
     Internal endpoint for isolated Text-to-SQL testing.
     """
 
-    logger.info("Received SQL chat request")
+    query = request.query.strip()
 
-    sql_query = f"-- Generated SQL for: {request.query}"
+    if not query:
+        raise HTTPException(
+            status_code=422,
+            detail="SQL query cannot be empty.",
+        )
+
+    logger.info(
+        "Received SQL chat request: query_length=%d",
+        len(query),
+    )
+
+    sql_query = f"-- Generated SQL for: {query}"
+
+    logger.info("SQL chat request completed successfully")
 
     return SQLChatResponse(
         sql_query=sql_query,
