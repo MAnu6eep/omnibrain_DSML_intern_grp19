@@ -103,6 +103,7 @@ with st.sidebar:
 
     st.subheader("⚙️ System Status")
     st.success("🟢 Vector Store: Qdrant Connected")
+    st.success("🟢 Text-to-SQL Agent: Ready (SQLite Stock DB)")
     st.info("🟢 LangGraph Agents: Ready")
 
     if st.button("🗑️ Clear Chat History"):
@@ -177,6 +178,23 @@ if user_query := st.chat_input("Ask a question about the document or architectur
                 returned_images = data.get("images", [])
 
                 retrieved_text = data.get("retrieved_text", [])
+
+                # Render SQL Execution Trace if returned by Backend API
+                sql_query = data.get("sql_query")
+                sql_result = data.get("sql_result")
+
+                if sql_query:
+                    with st.expander("📊 Text-to-SQL Agent Execution", expanded=True):
+                        st.markdown("**Generated SQL Query:**")
+                        st.code(sql_query, language="sql")
+
+                        if sql_result:
+                            st.markdown("**Query Results:**")
+                            if isinstance(sql_result, list):
+                                st.dataframe(sql_result)
+                            else:
+                                st.write(sql_result)
+
                 retrieved_images = data.get("retrieved_images", [])
 
                 if not final_answer and retrieved_text:
