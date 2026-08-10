@@ -1,8 +1,15 @@
+import logging
+import os
+import time
+
 from fastapi import APIRouter, HTTPException
 from langchain_core.messages import HumanMessage
 from pydantic import BaseModel, Field
-import time
-import logging
+from omnibrain.app.core.guardrails import check_input, check_output
+try:
+    from langfuse.callback import CallbackHandler as LangfuseCallbackHandler
+except ImportError:
+    LangfuseCallbackHandler = None
 
 from omnibrain.agents.graph import app as graph_app
 from omnibrain.app.schemas.chat import (
@@ -30,6 +37,28 @@ class SQLChatRequest(BaseModel):
 class SQLChatResponse(BaseModel):
     sql_query: str
     status: str
+
+
+def _get_langfuse_callbacks():
+    if LangfuseCallbackHandler and os.getenv("LANGFUSE_PUBLIC_KEY"):
+        try:
+            handler = LangfuseCallbackHandler(
+                public_key=os.getenv("LANGFUSE_PUBLIC_KEY"),
+                secret_key=os.getenv("LANGFUSE_SECRET_KEY"),
+                host=os.getenv(
+                    "LANGFUSE_HOST",
+                    "https://cloud.langfuse.com",
+                ),
+            )
+            return [handler]
+
+        except Exception as e:
+            logger.warning(
+                "Failed to initialize Langfuse callback: %s",
+                e,
+            )
+
+    return []
 
 
 def _clean_text_results(results):
@@ -82,7 +111,9 @@ def _clean_image_results(results):
         cleaned.append(
             RetrievedImage(
                 image_path=image_path,
-                page_number=int(item.get("page_number", 0) or 0),
+                page_number=int(
+                    item.get("page_number", 0) or 0
+                ),
                 caption=item.get("caption"),
                 score=float(item.get("score", 0.0) or 0.0),
                 source=item.get("source", ""),
@@ -115,7 +146,26 @@ async def chat(request: ChatRequest):
             status_code=422,
             detail="top_k must be between 1 and 20.",
         )
+        # ------------------------------
+    # NeMo Guardrails - Input Check
+    # ------------------------------
 
+    if not await check_input(request.message):
+        logger.warning(
+            "Chat request blocked by input guardrail"
+        )
+
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "status": "error",
+                "code": "GUARDRAIL_INPUT_REJECTED",
+                "message": (
+                    "Request was rejected by OmniBrain "
+                    "safety guardrails."
+                ),
+            },
+        )
     try:
         rag_logs = [
             {
@@ -129,16 +179,26 @@ async def chat(request: ChatRequest):
 
         result = None
 
+        callbacks = _get_langfuse_callbacks()
+        invoke_config = (
+            {"callbacks": callbacks}
+            if callbacks
+            else None
+        )
+
         for attempt in range(MAX_RETRIES + 1):
             try:
                 result = graph_app.invoke(
                     {
                         "messages": [
-                            HumanMessage(content=request.message)
+                            HumanMessage(
+                                content=request.message
+                            )
                         ],
                         "source_name": request.source_name,
                         "top_k": request.top_k,
-                    }
+                    },
+                    config=invoke_config,
                 )
 
                 break
@@ -214,7 +274,10 @@ async def chat(request: ChatRequest):
                 final_response = last_msg.content
 
             elif isinstance(last_msg, dict):
-                final_response = last_msg.get("content", "")
+                final_response = last_msg.get(
+                    "content",
+                    "",
+                )
 
             else:
                 final_response = str(last_msg)
@@ -224,7 +287,26 @@ async def chat(request: ChatRequest):
                 "response",
                 "No response generated.",
             )
+            # ------------------------------
+    # NeMo Guardrails - Output Check
+    # ------------------------------
 
+        if not await check_output(final_response):
+                logger.warning(
+                "Generated response blocked by output guardrail"
+        )
+
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "status": "error",
+                "code": "GUARDRAIL_OUTPUT_REJECTED",
+                "message": (
+                    "Generated response was rejected by "
+                    "OmniBrain output guardrails."
+                ),
+            },
+        )
         retrieved_imgs = _clean_image_results(
             result.get("retrieved_images", [])
         )
@@ -235,10 +317,13 @@ async def chat(request: ChatRequest):
             if img.image_path
         ]
 
-        execution_time = time.perf_counter() - start_time
+        execution_time = (
+            time.perf_counter() - start_time
+        )
 
         logger.info(
-            "Chat request completed successfully in %.3f seconds",
+            "Chat request completed successfully "
+            "in %.3f seconds",
             execution_time,
         )
 
@@ -247,7 +332,8 @@ async def chat(request: ChatRequest):
             thought_process=[
                 ThoughtStep(**step)
                 for step in (
-                    rag_logs + result.get("thought_process", [])
+                    rag_logs
+                    + result.get("thought_process", [])
                 )
             ],
             images=image_paths,
@@ -262,7 +348,9 @@ async def chat(request: ChatRequest):
         raise
 
     except Exception as e:
-        execution_time = time.perf_counter() - start_time
+        execution_time = (
+            time.perf_counter() - start_time
+        )
 
         logger.exception(
             "Chat pipeline failed after %.3f seconds: %s",
@@ -279,7 +367,10 @@ async def chat(request: ChatRequest):
         )
 
 
-@router.post("/sql", response_model=SQLChatResponse)
+@router.post(
+    "/sql",
+    response_model=SQLChatResponse,
+)
 async def chat_sql(request: SQLChatRequest):
     """
     Internal endpoint for isolated Text-to-SQL testing.
@@ -300,7 +391,9 @@ async def chat_sql(request: SQLChatRequest):
 
     sql_query = f"-- Generated SQL for: {query}"
 
-    logger.info("SQL chat request completed successfully")
+    logger.info(
+        "SQL chat request completed successfully"
+    )
 
     return SQLChatResponse(
         sql_query=sql_query,
