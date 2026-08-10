@@ -1,13 +1,18 @@
 """
 omnibrain/agents/evaluators/grader.py
-Grader Node for Self-RAG: Evaluates relevance of retrieved context against user query.
+Self-RAG Grader Evaluator: Combines LLM relevance grading
+and Cosine Similarity thresholding.
 """
+
+from typing import Dict, List
 
 from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel, Field
 
 from omnibrain.agents.llm import get_llm_response
 from omnibrain.agents.state.state import AgentState
+
+SIMILARITY_THRESHOLD = 0.70
 
 
 # 1. Pydantic schema for structured grading response
@@ -73,7 +78,7 @@ def grader_node(state: AgentState) -> dict:
         }
         return {"retrieval_relevance_score": "no", "thought_process": [thought]}
 
-        # Execute grading prompt via get_llm_response
+    # Execute grading prompt via get_llm_response
     try:
         prompt_input = GRADER_PROMPT.format(question=question, context=combined_context)
         response_text, provider = get_llm_response(prompt_input)
@@ -94,3 +99,42 @@ def grader_node(state: AgentState) -> dict:
     }
 
     return {"retrieval_relevance_score": score, "thought_process": [thought]}
+
+
+# 4. Cosine Similarity Threshold Grader Class
+class RetrievalGrader:
+    def __init__(self, threshold: float = SIMILARITY_THRESHOLD):
+        self.threshold = threshold
+
+    def grade(
+        self,
+        query: str,
+        retrieved_docs: List[Dict],
+    ) -> Dict:
+        """
+        Evaluate retrieved documents based on cosine similarity scores.
+        """
+        if not retrieved_docs:
+            return {
+                "query": query,
+                "is_relevant": False,
+                "confidence": 0.0,
+                "best_score": 0.0,
+                "reason": "No documents retrieved.",
+            }
+
+        best_score = max(doc.get("score", 0.0) for doc in retrieved_docs)
+        is_relevant = best_score >= self.threshold
+
+        return {
+            "query": query,
+            "is_relevant": is_relevant,
+            "confidence": round(best_score, 4),
+            "best_score": round(best_score, 4),
+            "threshold": self.threshold,
+            "reason": (
+                "Relevant context found."
+                if is_relevant
+                else "Retrieved context below similarity threshold."
+            ),
+        }
