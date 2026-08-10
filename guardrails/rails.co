@@ -1,2 +1,15 @@
-define bot say hello
-  "Hello from OmniBrain guardrails placeholder."
+define user ask off topic
+  "What is the capital of France?"
+  "Who won the FIFA World Cup?"
+  "Tell me a joke"
+  "What is the latest news?"
+  "Who is the president of the United States?"
+
+define flow check input
+  $allowed = execute check_input
+  if not $allowed
+    bot refuse off topic
+    stop
+
+define bot refuse off topic
+  "I can only answer questions related to the documents and financial data available in OmniBrain."
