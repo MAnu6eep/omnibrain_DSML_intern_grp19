@@ -115,11 +115,31 @@ def extract_images(
                 with open(file_path, "wb") as file:
                     file.write(image_bytes)
 
+                bbox = None
+
+                if image_rect:
+                    bbox = [
+                        float(image_rect.x0),
+                        float(image_rect.y0),
+                        float(image_rect.width),
+                        float(image_rect.height),
+                    ]
+
                 extracted_images.append(
                     {
                         "page_number": page_number + 1,
                         "image_path": str(file_path),
                         "dimensions": (width, height),
+                        "bbox": (
+                            [
+                                image_rect.x0,
+                                image_rect.y0,
+                                image_rect.width,
+                                image_rect.height,
+                            ]
+                        if image_rect
+                        else None
+                        ),
                         "caption": caption,
                         "image_bytes": image_bytes,
                     }
