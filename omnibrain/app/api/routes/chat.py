@@ -1,8 +1,15 @@
+import logging
+import os
+import time
+
 from fastapi import APIRouter, HTTPException
 from langchain_core.messages import HumanMessage
 from pydantic import BaseModel
-import time
-import logging
+
+try:
+    from langfuse.callback import CallbackHandler as LangfuseCallbackHandler
+except ImportError:
+    LangfuseCallbackHandler = None
 
 from omnibrain.agents.graph import app as graph_app
 from omnibrain.app.schemas.chat import (
@@ -25,6 +32,20 @@ class SQLChatRequest(BaseModel):
 class SQLChatResponse(BaseModel):
     sql_query: str
     status: str
+
+
+def _get_langfuse_callbacks():
+    if LangfuseCallbackHandler and os.getenv("LANGFUSE_PUBLIC_KEY"):
+        try:
+            handler = LangfuseCallbackHandler(
+                public_key=os.getenv("LANGFUSE_PUBLIC_KEY"),
+                secret_key=os.getenv("LANGFUSE_SECRET_KEY"),
+                host=os.getenv("LANGFUSE_HOST", "https://cloud.langfuse.com"),
+            )
+            return [handler]
+        except Exception as e:
+            logger.warning("Failed to initialize Langfuse callback: %s", e)
+    return []
 
 
 def _clean_text_results(results):
@@ -96,17 +117,14 @@ async def chat(request: ChatRequest):
 
     try:
 
-        rag_logs = [
-            {
-                "agent": "Self-RAG",
-                "action": "Initial vector search started."
-            }
-        ]
+        rag_logs = [{"agent": "Self-RAG", "action": "Initial vector search started."}]
 
         MAX_RETRIES = 2
         RETRY_DELAY = 1
 
         result = None
+        callbacks = _get_langfuse_callbacks()
+        invoke_config = {"callbacks": callbacks} if callbacks else None
 
         for attempt in range(MAX_RETRIES + 1):
 
@@ -117,7 +135,8 @@ async def chat(request: ChatRequest):
                         "messages": [HumanMessage(content=request.message)],
                         "source_name": request.source_name,
                         "top_k": request.top_k,
-                    }
+                    },
+                    config=invoke_config,
                 )
 
                 break
@@ -130,7 +149,7 @@ async def chat(request: ChatRequest):
                 rag_logs.append(
                     {
                         "agent": "Self-RAG",
-                        "action": f"Attempt {attempt + 1} failed. Retrying..."
+                        "action": f"Attempt {attempt + 1} failed. Retrying...",
                     }
                 )
 
@@ -154,16 +173,10 @@ async def chat(request: ChatRequest):
                 [
                     {
                         "agent": "Self-RAG",
-                        "action": "Initial search returned no relevant chunks."
+                        "action": "Initial search returned no relevant chunks.",
                     },
-                    {
-                        "agent": "Self-RAG",
-                        "action": "Rewriting query."
-                    },
-                    {
-                        "agent": "Self-RAG",
-                        "action": "Retrying vector search."
-                    },
+                    {"agent": "Self-RAG", "action": "Rewriting query."},
+                    {"agent": "Self-RAG", "action": "Retrying vector search."},
                 ]
             )
 
@@ -172,7 +185,7 @@ async def chat(request: ChatRequest):
             rag_logs.append(
                 {
                     "agent": "Self-RAG",
-                    "action": f"Retrieved {len(retrieved)} relevant chunks."
+                    "action": f"Retrieved {len(retrieved)} relevant chunks.",
                 }
             )
 
@@ -195,20 +208,11 @@ async def chat(request: ChatRequest):
 
         if not final_response:
 
-            final_response = result.get(
-                "response",
-                "No response generated."
-            )
+            final_response = result.get("response", "No response generated.")
 
-        retrieved_imgs = _clean_image_results(
-            result.get("retrieved_images", [])
-        )
+        retrieved_imgs = _clean_image_results(result.get("retrieved_images", []))
 
-        image_paths = [
-            img.image_path
-            for img in retrieved_imgs
-            if img.image_path
-        ]
+        image_paths = [img.image_path for img in retrieved_imgs if img.image_path]
 
         logger.info("Chat request completed successfully")
 
@@ -219,9 +223,7 @@ async def chat(request: ChatRequest):
                 for step in rag_logs + result.get("thought_process", [])
             ],
             images=image_paths,
-            retrieved_text=_clean_text_results(
-                result.get("retrieved_text", [])
-            ),
+            retrieved_text=_clean_text_results(result.get("retrieved_text", [])),
             retrieved_images=retrieved_imgs,
             status="completed",
         )
@@ -231,8 +233,7 @@ async def chat(request: ChatRequest):
         logger.exception("Chat pipeline failed")
 
         raise HTTPException(
-            status_code=504,
-            detail="Request timed out after multiple retry attempts."
+            status_code=504, detail="Request timed out after multiple retry attempts."
         )
 
 
