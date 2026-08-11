@@ -8,6 +8,10 @@ from fastapi import APIRouter, File, HTTPException, UploadFile
 from omnibrain.app.schemas.ingestion import UploadResponse
 from omnibrain.app.services.ingestion.ingestion_service import IngestionService
 
+
+STATIC_PDF_DIR = Path("static/pdfs")
+STATIC_PDF_DIR.mkdir(parents=True, exist_ok=True)
+
 router = APIRouter()
 job_store = {}
 
@@ -31,14 +35,24 @@ async def upload_pdf(file: UploadFile = File(...)):
     file_suffix = Path(filename).suffix.lower()
 
     if (
-        file.content_type not in {"application/pdf", "application/octet-stream"}
+        file.content_type not in {
+            "application/pdf",
+            "application/octet-stream",
+        }
         and file_suffix != ".pdf"
     ):
         raise HTTPException(
             status_code=400,
             detail="Malformed or unsupported file. Please upload a valid PDF.",
         )
+
     upload_id = str(uuid.uuid4())
+
+    STATIC_PDF_DIR.mkdir(parents=True, exist_ok=True)
+
+    permanent_pdf_path = STATIC_PDF_DIR / f"{upload_id}.pdf"
+
+    temp_path = None
 
     job_store[upload_id] = {
         "status": "processing",
@@ -49,14 +63,25 @@ async def upload_pdf(file: UploadFile = File(...)):
         "warnings": [],
     }
 
-    temp_path = None
-
     try:
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp:
-            file_bytes = await file.read()
-            if not file_bytes:
-                raise HTTPException(status_code=400, detail="Uploaded PDF is empty.")
+        file_bytes = await file.read()
 
+        if not file_bytes:
+            raise HTTPException(
+                status_code=400,
+                detail="Uploaded PDF is empty.",
+            )
+
+        # Permanently store PDF for static serving
+        # and PDF page rendering.
+        with open(permanent_pdf_path, "wb") as pdf_file:
+            pdf_file.write(file_bytes)
+
+        # Temporary file for the ingestion pipeline.
+        with tempfile.NamedTemporaryFile(
+            delete=False,
+            suffix=".pdf",
+        ) as temp:
             temp.write(file_bytes)
             temp_path = temp.name
 
@@ -76,25 +101,46 @@ async def upload_pdf(file: UploadFile = File(...)):
             "warnings": result.warnings,
         }
 
-        return _upload_response(upload_id, job_store[upload_id])
+        return _upload_response(
+            upload_id,
+            job_store[upload_id],
+        )
+
+    except HTTPException:
+        raise
 
     except Exception as e:
-
         job_store[upload_id]["status"] = "failed"
-        job_store[upload_id]["message"] = f"Processing failed: {str(e)}"
+        job_store[upload_id]["message"] = (
+            f"Processing failed: {str(e)}"
+        )
         job_store[upload_id]["warnings"] = [str(e)]
 
-        raise HTTPException(status_code=500, detail=f"Processing failed: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Processing failed: {str(e)}",
+        )
 
     finally:
+        # Only delete the temporary processing file.
+        # The permanent PDF in static/pdfs is retained.
         if temp_path and os.path.exists(temp_path):
             os.remove(temp_path)
 
 
-@router.get("/upload/{upload_id}", response_model=UploadResponse)
+@router.get(
+    "/upload/{upload_id}",
+    response_model=UploadResponse,
+)
 async def get_upload_status(upload_id: str):
 
     if upload_id not in job_store:
-        raise HTTPException(status_code=404, detail="Upload ID not found.")
+        raise HTTPException(
+            status_code=404,
+            detail="Upload ID not found.",
+        )
 
-    return _upload_response(upload_id, job_store[upload_id])
+    return _upload_response(
+        upload_id,
+        job_store[upload_id],
+    )

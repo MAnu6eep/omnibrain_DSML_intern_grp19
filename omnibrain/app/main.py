@@ -3,9 +3,10 @@ from datetime import datetime, timezone
 
 from dotenv import load_dotenv
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.routing import APIRoute
-
+from omnibrain.app.api.routes.pdf import router as pdf_router
 from omnibrain.app.api.routes.chat import router as chat_router
 from omnibrain.app.api.routes.ingestion import router as ingestion_router
 from omnibrain.app.core.constants import APP_NAME, APP_VERSION
@@ -29,6 +30,17 @@ def create_app() -> FastAPI:
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
+    )
+    app.mount(
+    "/static/pdf_images",
+    StaticFiles(directory="static/pdf_images"),
+    name="pdf_images",
+)
+
+    app.mount(
+    "/static/pdfs",
+    StaticFiles(directory="static/pdfs"),
+    name="pdfs",
     )
 
     @app.get("/")
@@ -57,6 +69,11 @@ def create_app() -> FastAPI:
         chat_router,
         prefix="/api/v1/chat",
         tags=["Chat"],
+    )
+    app.include_router(
+    pdf_router,
+    prefix="/api/v1/pdf",
+    tags=["PDF"],
     )
 
     logger.info(
