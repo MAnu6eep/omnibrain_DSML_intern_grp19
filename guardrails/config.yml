@@ -2,10 +2,12 @@ models:
   - type: main
     engine: openai
     model: gpt-4o-mini
+
 rails:
   input:
     flows:
-      - check input
+      - self check input
+
   output:
     flows:
-      - check output
+      - self check output

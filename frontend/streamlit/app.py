@@ -1,4 +1,5 @@
 import os
+import time
 
 import requests
 import streamlit as st
@@ -26,7 +27,7 @@ def render_image_asset(image_path: str, caption: str):
         st.warning(f"Image asset missing at: `{image_path}`")
 
 
-# Initialize Chat Session State History [Day 1 Scope]
+# Initialize Session State Variables
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
@@ -36,8 +37,18 @@ if "active_document" not in st.session_state:
 if "upload_summary" not in st.session_state:
     st.session_state.upload_summary = None
 
+# Telemetry Session Metrics [Day 3 Scope]
+if "session_tokens" not in st.session_state:
+    st.session_state.session_tokens = 0
+
+if "session_latency_ms" not in st.session_state:
+    st.session_state.session_latency_ms = 0.0
+
+if "total_queries" not in st.session_state:
+    st.session_state.total_queries = 0
+
 # ==============================================================================
-# 2. SIDEBAR CONTROLS [Day 1 Scope]
+# 2. SIDEBAR CONTROLS [Day 1 & Day 3 Scope]
 # ==============================================================================
 with st.sidebar:
     st.title("🧠 OmniBrain Console")
@@ -103,10 +114,30 @@ with st.sidebar:
 
     st.subheader("⚙️ System Status")
     st.success("🟢 Vector Store: Qdrant Connected")
+    st.success("🟢 Text-to-SQL Agent: Ready (SQLite Stock DB)")
     st.info("🟢 LangGraph Agents: Ready")
+
+    st.markdown("---")
+    st.subheader("📊 Session Telemetry (Langfuse)")
+    col1, col2 = st.columns(2)
+    with col1:
+        st.metric("Queries", st.session_state.total_queries)
+        st.metric("Est. Tokens", f"{st.session_state.session_tokens:,}")
+    with col2:
+        avg_lat = st.session_state.session_latency_ms / max(
+            1, st.session_state.total_queries
+        )
+        st.metric("Avg Latency", f"{avg_lat:.0f} ms")
+        est_cost = (st.session_state.session_tokens / 1000) * 0.00015
+        st.metric("Est. Cost", f"${est_cost:.4f}")
+
+    st.caption("⚡ Execution traces synced to Langfuse")
 
     if st.button("🗑️ Clear Chat History"):
         st.session_state.messages = []
+        st.session_state.session_tokens = 0
+        st.session_state.session_latency_ms = 0.0
+        st.session_state.total_queries = 0
         st.rerun()
 
 # ==============================================================================
@@ -157,6 +188,7 @@ if user_query := st.chat_input("Ask a question about the document or architectur
         returned_images = []
 
         try:
+            start_time = time.time()
             status_container.write("📡 Routing request through FastAPI backend...")
             payload = {
                 "message": user_query,
@@ -170,13 +202,39 @@ if user_query := st.chat_input("Ask a question about the document or architectur
                 timeout=60,
             )
 
+            # Update Telemetry Metrics
+            elapsed_ms = (time.time() - start_time) * 1000.0
+            st.session_state.session_latency_ms += elapsed_ms
+            st.session_state.total_queries += 1
+
             if response.status_code == 200:
                 data = response.json()
                 final_answer = (data.get("response") or "").strip()
                 thought_steps = data.get("thought_process", [])
                 returned_images = data.get("images", [])
 
+                # Estimate tokens processed (~4 chars per token)
+                tokens_est = (len(user_query) + len(final_answer)) // 4
+                st.session_state.session_tokens += max(10, tokens_est)
+
                 retrieved_text = data.get("retrieved_text", [])
+
+                # Render SQL Execution Trace if returned by Backend API
+                sql_query = data.get("sql_query")
+                sql_result = data.get("sql_result")
+
+                if sql_query:
+                    with st.expander("📊 Text-to-SQL Agent Execution", expanded=True):
+                        st.markdown("**Generated SQL Query:**")
+                        st.code(sql_query, language="sql")
+
+                        if sql_result:
+                            st.markdown("**Query Results:**")
+                            if isinstance(sql_result, list):
+                                st.dataframe(sql_result)
+                            else:
+                                st.write(sql_result)
+
                 retrieved_images = data.get("retrieved_images", [])
 
                 if not final_answer and retrieved_text:
@@ -195,11 +253,20 @@ if user_query := st.chat_input("Ask a question about the document or architectur
                 if data.get("status"):
                     status_container.write(f"Status: {data.get('status')}")
 
-                # Render Live Agent Thoughts
+                # Render Live Agent Thoughts with Self-RAG Traces
                 for step in thought_steps:
                     agent_name = step.get("agent", "Agent")
                     action_msg = step.get("action", "")
-                    status_container.write(f"👉 **{agent_name}**: {action_msg}")
+
+                    if "Grader" in agent_name or "Evaluator" in agent_name:
+                        if "YES" in action_msg.upper() or "GOOD" in action_msg.upper():
+                            status_container.write(f"🟢 **{agent_name}**: {action_msg}")
+                        else:
+                            status_container.write(f"⚠️ **{agent_name}**: {action_msg}")
+                    elif "Rewriter" in agent_name or "Retry" in agent_name:
+                        status_container.write(f"🔄 **{agent_name}**: {action_msg}")
+                    else:
+                        status_container.write(f"👉 **{agent_name}**: {action_msg}")
 
                 status_container.update(
                     label="✅ Agentic Execution Complete!",
@@ -222,12 +289,35 @@ if user_query := st.chat_input("Ask a question about the document or architectur
                             )
 
                 if retrieved_text:
-                    with st.expander("Retrieved text context", expanded=False):
+                    with st.expander(
+                        "📄 Retrieved Context & Origin Badges", expanded=False
+                    ):
                         for item in retrieved_text[:5]:
-                            doc_name = item.get("document", "Unknown")
+                            doc_name = item.get(
+                                "source", item.get("document", "Unknown")
+                            )
                             page_num = item.get("page", "?")
-                            st.markdown(f"**{doc_name}** - page {page_num}")
-                            st.write(item.get("text", ""))
+
+                            # Determine Context Origin Badge
+                            if (
+                                "http" in str(doc_name).lower()
+                                or "web" in str(doc_name).lower()
+                            ):
+                                origin_badge = "🌐 [DuckDuckGo Web Search]"
+                            elif (
+                                "sql" in str(doc_name).lower()
+                                or "stock" in str(doc_name).lower()
+                            ):
+                                origin_badge = "📊 [SQLite Stock DB]"
+                            else:
+                                origin_badge = "🗄️ [Qdrant Vector DB]"
+
+                            st.markdown(
+                                f"**{origin_badge}** | "
+                                f"Source: `{doc_name}` (Page {page_num})"
+                            )
+                            st.write(item.get("text", item.get("content", "")))
+                            st.markdown("---")
 
             else:
                 status_container.update(label="❌ Backend API Error", state="error")

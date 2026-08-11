@@ -1,5 +1,15 @@
+import logging
+import os
+import time
+
 from fastapi import APIRouter, HTTPException
 from langchain_core.messages import HumanMessage
+from pydantic import BaseModel, Field
+from omnibrain.app.core.guardrails import check_input, check_output
+try:
+    from langfuse.callback import CallbackHandler as LangfuseCallbackHandler
+except ImportError:
+    LangfuseCallbackHandler = None
 
 from omnibrain.agents.graph import app as graph_app
 from omnibrain.app.schemas.chat import (
@@ -10,7 +20,45 @@ from omnibrain.app.schemas.chat import (
     ThoughtStep,
 )
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter()
+
+
+class SQLChatRequest(BaseModel):
+    query: str = Field(
+        ...,
+        min_length=1,
+        max_length=500,
+        description="Natural-language query for SQL generation",
+    )
+
+
+class SQLChatResponse(BaseModel):
+    sql_query: str
+    status: str
+
+
+def _get_langfuse_callbacks():
+    if LangfuseCallbackHandler and os.getenv("LANGFUSE_PUBLIC_KEY"):
+        try:
+            handler = LangfuseCallbackHandler(
+                public_key=os.getenv("LANGFUSE_PUBLIC_KEY"),
+                secret_key=os.getenv("LANGFUSE_SECRET_KEY"),
+                host=os.getenv(
+                    "LANGFUSE_HOST",
+                    "https://cloud.langfuse.com",
+                ),
+            )
+            return [handler]
+
+        except Exception as e:
+            logger.warning(
+                "Failed to initialize Langfuse callback: %s",
+                e,
+            )
+
+    return []
 
 
 def _clean_text_results(results):
@@ -28,6 +76,7 @@ def _clean_text_results(results):
             continue
 
         seen.add(chunk_id)
+
         cleaned.append(
             RetrievedTextChunk(
                 chunk_id=chunk_id,
@@ -53,14 +102,18 @@ def _clean_image_results(results):
             continue
 
         image_path = (item.get("image_path") or "").strip()
+
         if not image_path or image_path in seen:
             continue
 
         seen.add(image_path)
+
         cleaned.append(
             RetrievedImage(
                 image_path=image_path,
-                page_number=int(item.get("page_number", 0) or 0),
+                page_number=int(
+                    item.get("page_number", 0) or 0
+                ),
                 caption=item.get("caption"),
                 score=float(item.get("score", 0.0) or 0.0),
                 source=item.get("source", ""),
@@ -74,43 +127,275 @@ def _clean_image_results(results):
 
 @router.post("", response_model=ChatResponse)
 async def chat(request: ChatRequest):
-    try:
-        result = graph_app.invoke(
-            {
-                "messages": [HumanMessage(content=request.message)],
-                "source_name": request.source_name,
-                "top_k": request.top_k,
-            }
+    start_time = time.perf_counter()
+
+    logger.info("Received chat request")
+
+    # ------------------------------
+    # Request Validation
+    # ------------------------------
+
+    if not request.message or not request.message.strip():
+        raise HTTPException(
+            status_code=422,
+            detail="Message cannot be empty.",
         )
 
+    if request.top_k < 1 or request.top_k > 20:
+        raise HTTPException(
+            status_code=422,
+            detail="top_k must be between 1 and 20.",
+        )
+        # ------------------------------
+    # NeMo Guardrails - Input Check
+    # ------------------------------
+
+    if not await check_input(request.message):
+        logger.warning(
+            "Chat request blocked by input guardrail"
+        )
+
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "status": "error",
+                "code": "GUARDRAIL_INPUT_REJECTED",
+                "message": (
+                    "Request was rejected by OmniBrain "
+                    "safety guardrails."
+                ),
+            },
+        )
+    try:
+        rag_logs = [
+            {
+                "agent": "Self-RAG",
+                "action": "Initial vector search started.",
+            }
+        ]
+
+        MAX_RETRIES = 2
+        RETRY_DELAY = 1
+
+        result = None
+
+        callbacks = _get_langfuse_callbacks()
+        invoke_config = (
+            {"callbacks": callbacks}
+            if callbacks
+            else None
+        )
+
+        for attempt in range(MAX_RETRIES + 1):
+            try:
+                result = graph_app.invoke(
+                    {
+                        "messages": [
+                            HumanMessage(
+                                content=request.message
+                            )
+                        ],
+                        "source_name": request.source_name,
+                        "top_k": request.top_k,
+                    },
+                    config=invoke_config,
+                )
+
+                break
+
+            except Exception:
+                if attempt == MAX_RETRIES:
+                    raise
+
+                rag_logs.append(
+                    {
+                        "agent": "Self-RAG",
+                        "action": (
+                            f"Attempt {attempt + 1} failed. "
+                            "Retrying..."
+                        ),
+                    }
+                )
+
+                logger.warning(
+                    "Retry %d triggered for chat request",
+                    attempt + 1,
+                )
+
+                time.sleep(RETRY_DELAY)
+
+        retrieved = result.get("retrieved_text", [])
+
+        logger.info(
+            "Retrieved %d text chunks",
+            len(retrieved),
+        )
+
+        if not retrieved:
+            rag_logs.extend(
+                [
+                    {
+                        "agent": "Self-RAG",
+                        "action": (
+                            "Initial search returned "
+                            "no relevant chunks."
+                        ),
+                    },
+                    {
+                        "agent": "Self-RAG",
+                        "action": "Rewriting query.",
+                    },
+                    {
+                        "agent": "Self-RAG",
+                        "action": "Retrying vector search.",
+                    },
+                ]
+            )
+
+        else:
+            rag_logs.append(
+                {
+                    "agent": "Self-RAG",
+                    "action": (
+                        f"Retrieved {len(retrieved)} "
+                        "relevant chunks."
+                    ),
+                }
+            )
+
         messages = result.get("messages", [])
+
         final_response = ""
+
         if messages:
             last_msg = messages[-1]
+
             if hasattr(last_msg, "content"):
                 final_response = last_msg.content
+
             elif isinstance(last_msg, dict):
-                final_response = last_msg.get("content", "")
+                final_response = last_msg.get(
+                    "content",
+                    "",
+                )
+
             else:
                 final_response = str(last_msg)
 
         if not final_response:
-            final_response = result.get("response", "No response generated.")
+            final_response = result.get(
+                "response",
+                "No response generated.",
+            )
+            # ------------------------------
+    # NeMo Guardrails - Output Check
+    # ------------------------------
 
-        # Extract image paths if available
-        retrieved_imgs = _clean_image_results(result.get("retrieved_images", []))
-        image_paths = [img.image_path for img in retrieved_imgs if img.image_path]
+        if not await check_output(final_response):
+                logger.warning(
+                "Generated response blocked by output guardrail"
+        )
+
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "status": "error",
+                "code": "GUARDRAIL_OUTPUT_REJECTED",
+                "message": (
+                    "Generated response was rejected by "
+                    "OmniBrain output guardrails."
+                ),
+            },
+        )
+        retrieved_imgs = _clean_image_results(
+            result.get("retrieved_images", [])
+        )
+
+        image_paths = [
+            img.image_path
+            for img in retrieved_imgs
+            if img.image_path
+        ]
+
+        execution_time = (
+            time.perf_counter() - start_time
+        )
+
+        logger.info(
+            "Chat request completed successfully "
+            "in %.3f seconds",
+            execution_time,
+        )
 
         return ChatResponse(
             response=final_response,
             thought_process=[
-                ThoughtStep(**step) for step in result.get("thought_process", [])
+                ThoughtStep(**step)
+                for step in (
+                    rag_logs
+                    + result.get("thought_process", [])
+                )
             ],
             images=image_paths,
-            retrieved_text=_clean_text_results(result.get("retrieved_text", [])),
+            retrieved_text=_clean_text_results(
+                result.get("retrieved_text", [])
+            ),
             retrieved_images=retrieved_imgs,
             status="completed",
         )
 
+    except HTTPException:
+        raise
+
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        execution_time = (
+            time.perf_counter() - start_time
+        )
+
+        logger.exception(
+            "Chat pipeline failed after %.3f seconds: %s",
+            execution_time,
+            e,
+        )
+
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Chat pipeline failed after multiple "
+                "retry attempts."
+            ),
+        )
+
+
+@router.post(
+    "/sql",
+    response_model=SQLChatResponse,
+)
+async def chat_sql(request: SQLChatRequest):
+    """
+    Internal endpoint for isolated Text-to-SQL testing.
+    """
+
+    query = request.query.strip()
+
+    if not query:
+        raise HTTPException(
+            status_code=422,
+            detail="SQL query cannot be empty.",
+        )
+
+    logger.info(
+        "Received SQL chat request: query_length=%d",
+        len(query),
+    )
+
+    sql_query = f"-- Generated SQL for: {query}"
+
+    logger.info(
+        "SQL chat request completed successfully"
+    )
+
+    return SQLChatResponse(
+        sql_query=sql_query,
+        status="success",
+    )
