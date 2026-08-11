@@ -1,2 +1,9 @@
-define bot say hello
-  "Hello from OmniBrain guardrails placeholder."
+define flow check input
+  $allowed = execute check_input_guardrail
+  if not $allowed
+    bot refuse input
+
+define flow check output
+  $allowed = execute check_output_guardrail
+  if not $allowed
+    bot refuse output
