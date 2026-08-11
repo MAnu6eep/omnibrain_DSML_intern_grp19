@@ -1,85 +1,187 @@
 import os
 import time
+
 from pathlib import Path
 from typing import Any, Dict, List
 
-from omnibrain.app.core.logging import logger, time_execution
-from omnibrain.app.schemas.ingestion import ExtractedImage, IngestionResponse, TextChunk
+from omnibrain.app.core.logging import (
+    logger,
+    time_execution,
+)
 
-# 1. Connect Charan's PDF Text Extractor
+from omnibrain.app.schemas.ingestion import (
+    ExtractedImage,
+    IngestionResponse,
+    TextChunk,
+)
+
+
+# ============================================================
+# TEXT EXTRACTION
+# ============================================================
+
 try:
-    from omnibrain.app.services.ingestion.text_parser import extract_text_and_chunk
+
+    from omnibrain.app.services.ingestion.text_parser import (
+        extract_text_and_chunk,
+    )
+
 except ImportError:
+
     try:
-        from scripts.prototypes.pdf_text_proto import extract_text_and_chunk
+
+        from scripts.prototypes.pdf_text_proto import (
+            extract_text_and_chunk,
+        )
+
     except ImportError:
 
-        def extract_text_and_chunk(pdf_path: str) -> List[Dict[str, Any]]:
-            logger.warning("Using fallback text parsing interface")
+        def extract_text_and_chunk(
+            pdf_path: str,
+        ) -> List[Dict[str, Any]]:
+
+            logger.warning(
+                "Using fallback text parsing interface"
+            )
+
             return []
 
 
-# 2. Connect Om's Vision Extractor Engine
+# ============================================================
+# IMAGE EXTRACTION
+# ============================================================
+
 try:
+
     from omnibrain.app.services.vision.extractor import (
         extract_images as extract_images_from_pdf,
     )
+
 except ImportError:
+
     try:
-        from omnibrain.app.services.vision.extractor import extract_images_from_pdf
+
+        from omnibrain.app.services.vision.extractor import (
+            extract_images_from_pdf,
+        )
+
     except ImportError:
 
         def extract_images_from_pdf(
-            pdf_path: str, output_dir: str = "output/images"
+            pdf_path: str,
+            output_dir: str = "output/images",
         ) -> List[Dict[str, Any]]:
-            logger.warning("Using fallback vision extraction interface")
+
+            logger.warning(
+                "Using fallback vision extraction interface"
+            )
+
             return []
 
 
-# 3. Connect Meerja's Vector Store Indexers
+# ============================================================
+# TEXT INDEXER
+# ============================================================
+
 try:
-    from omnibrain.vectorstore.indexers.text_indexer import index_text_chunks
+
+    from omnibrain.vectorstore.indexers.text_indexer import (
+        index_text_chunks,
+    )
+
 except ImportError:
 
-    def index_text_chunks(chunks: List[Any]) -> bool:
-        logger.warning("Using fallback text vector store indexer")
+    def index_text_chunks(
+        chunks: List[Any],
+    ) -> bool:
+
+        logger.warning(
+            "Using fallback text vector store indexer"
+        )
+
         return True
 
 
+# ============================================================
+# IMAGE INDEXER
+# ============================================================
+
 try:
-    from omnibrain.vectorstore.indexers.image_indexer import index_image_vectors
+
+    from omnibrain.vectorstore.indexers.image_indexer import (
+        index_image_vectors,
+    )
+
 except ImportError:
 
-    def index_image_vectors(images: List[Any]) -> bool:
-        logger.warning("Using fallback image vector store indexer")
+    def index_image_vectors(
+        images: List[Any],
+    ) -> bool:
+
+        logger.warning(
+            "Using fallback image vector store indexer"
+        )
+
         return True
 
+
+# ============================================================
+# INGESTION SERVICE
+# ============================================================
 
 class IngestionService:
-    """Centralized Pipeline Orchestrator for Multi-Modal PDF Ingestion.
-
-    Coordinates Text Parsing -> Vision Extraction -> Embedding Generation -> Vector
-    DB Storage.
-    """
 
     def __init__(self):
-        logger.info("Initializing IngestionService Pipeline Orchestrator")
 
-    @time_execution("Full Ingestion Pipeline")
+        logger.info(
+            "Initializing IngestionService Pipeline Orchestrator"
+        )
+
+    # ========================================================
+    # PUBLIC PDF PROCESSOR
+    # ========================================================
+
+    @time_execution(
+        "Full Ingestion Pipeline"
+    )
     def process_pdf(
-        self, file_path: str, source_filename: str = None
+        self,
+        file_path: str,
+        source_filename: str = None,
+        document_id: str = None,
     ) -> IngestionResponse:
-        """Executes the end-to-end ingestion flow for a given PDF document."""
-        return self._process_single_pdf(file_path, source_filename=source_filename)
 
-    def process_path(self, source_path: str) -> IngestionResponse:
-        """Process a single PDF file or a folder containing PDFs."""
+        return self._process_single_pdf(
+            file_path=file_path,
+            source_filename=source_filename,
+            document_id=document_id,
+        )
 
-        source = Path(source_path)
+    # ========================================================
+    # PROCESS PATH
+    # ========================================================
+
+    def process_path(
+        self,
+        source_path: str,
+    ) -> IngestionResponse:
+
+        source = Path(
+            source_path
+        )
+
         if source.is_dir():
-            pdf_files = sorted(path for path in source.rglob("*.pdf") if path.is_file())
+
+            pdf_files = sorted(
+                path
+                for path in source.rglob(
+                    "*.pdf"
+                )
+                if path.is_file()
+            )
 
             if not pdf_files:
+
                 raise FileNotFoundError(
                     f"No PDF files found under directory: {source_path}"
                 )
@@ -87,193 +189,695 @@ class IngestionService:
             aggregate_pages = 0
             aggregate_chunks = 0
             aggregate_images = 0
-            warnings: List[str] = []
+
+            warnings = []
 
             for pdf_file in pdf_files:
-                result = self._process_single_pdf(str(pdf_file), pdf_file.name)
-                aggregate_pages += result.pages_parsed
-                aggregate_chunks += result.text_chunks
-                aggregate_images += result.images_extracted
-                warnings.extend(result.warnings)
 
-            status = "completed" if not warnings else "partial"
+                document_id = str(
+                    __import__(
+                        "uuid"
+                    ).uuid4()
+                )
+
+                result = self._process_single_pdf(
+                    file_path=str(
+                        pdf_file
+                    ),
+                    source_filename=pdf_file.name,
+                    document_id=document_id,
+                )
+
+                aggregate_pages += (
+                    result.pages_parsed
+                )
+
+                aggregate_chunks += (
+                    result.text_chunks
+                )
+
+                aggregate_images += (
+                    result.images_extracted
+                )
+
+                warnings.extend(
+                    result.warnings
+                )
+
+            status = (
+                "completed"
+                if not warnings
+                else "partial"
+            )
 
             return IngestionResponse(
-                task_id=f"task_{int(time.time())}",
+                task_id=(
+                    f"task_{int(time.time())}"
+                ),
                 status=status,
-                message="Folder ingestion completed for the available PDF files.",
+                message=(
+                    "Folder ingestion completed."
+                ),
                 pages_parsed=aggregate_pages,
                 text_chunks=aggregate_chunks,
                 images_extracted=aggregate_images,
                 warnings=warnings,
             )
 
-        return self._process_single_pdf(source_path, source_filename=source.name)
+        document_id = str(
+            __import__(
+                "uuid"
+            ).uuid4()
+        )
+
+        return self._process_single_pdf(
+            file_path=source_path,
+            source_filename=source.name,
+            document_id=document_id,
+        )
+
+    # ========================================================
+    # SINGLE PDF
+    # ========================================================
 
     def _process_single_pdf(
-        self, file_path: str, source_filename: str = None
+        self,
+        file_path: str,
+        source_filename: str = None,
+        document_id: str = None,
     ) -> IngestionResponse:
-        if not os.path.exists(file_path):
-            raise FileNotFoundError(f"Source PDF file not found at path: {file_path}")
 
-        filename = source_filename or Path(file_path).name
-        logger.info("Starting ingestion workflow for file: %s", filename)
+        if not os.path.exists(
+            file_path
+        ):
 
-        warnings: List[str] = []
-
-        raw_chunks = self._run_text_extraction(file_path, filename)
-        validated_text_chunks = self._validate_text_chunks(raw_chunks, filename)
-        if not validated_text_chunks:
-            warnings.append(
-                "No text chunks were produced. Table extraction remains partial."
+            raise FileNotFoundError(
+                f"Source PDF file not found at path: {file_path}"
             )
 
-        raw_images = self._run_vision_extraction(file_path, filename)
-        validated_images = self._validate_images(raw_images, filename)
-        if not validated_images:
-            warnings.append("No embedded images were extracted from the document.")
-
-        persist_warning = self._persist_to_vector_store(
-            validated_text_chunks, validated_images
+        filename = (
+            source_filename
+            or Path(file_path).name
         )
+
+        logger.info(
+            "Starting ingestion workflow for file: %s",
+            filename,
+        )
+
+        if not document_id:
+
+            logger.warning(
+                "No document_id provided. "
+                "Generating one automatically."
+            )
+
+            document_id = str(
+                __import__(
+                    "uuid"
+                ).uuid4()
+            )
+
+        logger.info(
+            "Document ID for '%s': %s",
+            filename,
+            document_id,
+        )
+
+        warnings = []
+
+        # ====================================================
+        # TEXT
+        # ====================================================
+
+        raw_chunks = (
+            self._run_text_extraction(
+                file_path,
+                filename,
+            )
+        )
+
+        validated_text_chunks = (
+            self._validate_text_chunks(
+                raw_chunks,
+                filename,
+                document_id,
+            )
+        )
+
+        if not validated_text_chunks:
+
+            warnings.append(
+                "No text chunks were produced."
+            )
+
+        # ====================================================
+        # IMAGES
+        # ====================================================
+
+        raw_images = (
+            self._run_vision_extraction(
+                file_path,
+                filename,
+            )
+        )
+
+        validated_images = (
+            self._validate_images(
+                raw_images,
+                filename,
+                document_id,
+            )
+        )
+
+        if not validated_images:
+
+            warnings.append(
+                "No embedded images were extracted."
+            )
+
+        # ====================================================
+        # QDRANT
+        # ====================================================
+
+        persist_warning = (
+            self._persist_to_vector_store(
+                validated_text_chunks,
+                validated_images,
+            )
+        )
+
         if persist_warning:
-            warnings.append(persist_warning)
+
+            warnings.append(
+                persist_warning
+            )
+
+        # ====================================================
+        # PAGE COUNT
+        # ====================================================
+
+        pages = [
+            chunk.page_number
+            for chunk in validated_text_chunks
+        ]
+
+        pages.extend(
+            image.page_number
+            for image in validated_images
+        )
 
         total_pages = max(
-            [c.page_number for c in validated_text_chunks]
-            + [img.page_number for img in validated_images]
-            + [1]
+            pages + [1]
         )
 
-        status = "completed" if not warnings else "partial"
+        # ====================================================
+        # RESPONSE
+        # ====================================================
 
-        response = IngestionResponse(
-            task_id=f"task_{int(time.time())}",
+        status = (
+            "completed"
+            if not warnings
+            else "partial"
+        )
+
+        return IngestionResponse(
+            task_id=(
+                f"task_{int(time.time())}"
+            ),
             status=status,
             message=(
                 "PDF multi-modal pipeline successfully executed and indexed."
                 if status == "completed"
-                else "PDF multi-modal pipeline completed with warnings."
+                else
+                "PDF multi-modal pipeline completed with warnings."
             ),
             pages_parsed=total_pages,
-            text_chunks=len(validated_text_chunks),
-            images_extracted=len(validated_images),
+            text_chunks=len(
+                validated_text_chunks
+            ),
+            images_extracted=len(
+                validated_images
+            ),
             warnings=warnings,
         )
 
-        logger.info(
-            "Ingestion completed for '%s': %s text chunks, %s images stored.",
-            filename,
-            len(validated_text_chunks),
-            len(validated_images),
-        )
-        return response
+    # ========================================================
+    # TEXT EXTRACTION
+    # ========================================================
 
-    @time_execution("Text Extraction Stage")
-    def _run_text_extraction(self, file_path: str, filename: str) -> List[Any]:
+    @time_execution(
+        "Text Extraction Stage"
+    )
+    def _run_text_extraction(
+        self,
+        file_path: str,
+        filename: str,
+    ) -> List[Any]:
+
         try:
-            return extract_text_and_chunk(file_path)
-        except Exception as e:
-            logger.error(f"Error during text extraction: {str(e)}")
+
+            return extract_text_and_chunk(
+                file_path
+            )
+
+        except Exception as exc:
+
+            logger.error(
+                "Text extraction failed: %s",
+                exc,
+            )
+
             return []
 
-    @time_execution("Vision Extraction Stage")
-    def _run_vision_extraction(self, file_path: str, filename: str) -> List[Any]:
+    # ========================================================
+    # IMAGE EXTRACTION
+    # ========================================================
+
+    @time_execution(
+        "Vision Extraction Stage"
+    )
+    def _run_vision_extraction(
+        self,
+        file_path: str,
+        filename: str,
+    ) -> List[Any]:
+
         try:
-            return extract_images_from_pdf(file_path, output_dir="output/images")
-        except Exception as e:
-            logger.error(f"Error during vision extraction: {str(e)}")
+
+            return extract_images_from_pdf(
+                file_path,
+                output_dir="output/images",
+            )
+
+        except Exception as exc:
+
+            logger.error(
+                "Image extraction failed: %s",
+                exc,
+            )
+
             return []
+
+    # ========================================================
+    # TEXT VALIDATION
+    # ========================================================
 
     def _validate_text_chunks(
-        self, raw_chunks: List[Any], filename: str
+        self,
+        raw_chunks: List[Any],
+        filename: str,
+        document_id: str,
     ) -> List[TextChunk]:
-        """Converts raw dictionaries/objects
-        safely into typified
-        TextChunk Pydantic models."""
+
         validated = []
-        for idx, chunk in enumerate(raw_chunks):
+
+        for idx, chunk in enumerate(
+            raw_chunks
+        ):
+
             try:
-                if isinstance(chunk, TextChunk):
-                    if chunk.text.strip():
-                        validated.append(chunk)
-                elif isinstance(chunk, dict):
-                    page_num = chunk.get("page_number", chunk.get("page", 1))
-                    text = (chunk.get("text", chunk.get("content", "")) or "").strip()
+
+                if isinstance(
+                    chunk,
+                    TextChunk,
+                ):
+
+                    text = (
+                        chunk.text
+                        or ""
+                    ).strip()
+
                     if not text:
                         continue
 
-                    meta = chunk.get("metadata", {}) or {}
-                    meta.setdefault("source", chunk.get("source", filename))
-                    meta.setdefault("source_path", chunk.get("source_path", ""))
-                    meta.setdefault("section", chunk.get("section", "General"))
-                    meta.setdefault(
-                        "chunk_id", chunk.get("chunk_id", f"{filename}_chunk_{idx}")
+                    metadata = dict(
+                        chunk.metadata
+                        or {}
                     )
-                    meta.setdefault("modality", "text")
+
+                    chunk_id = (
+                        chunk.chunk_id
+                        or f"{filename}_chunk_{idx}"
+                    )
+
+                    source = (
+                        chunk.source
+                        or filename
+                    )
+
+                    source_path = (
+                        chunk.source_path
+                        or ""
+                    )
+
+                    metadata[
+                        "document_id"
+                    ] = document_id
+
+                    metadata[
+                        "chunk_id"
+                    ] = chunk_id
+
+                    metadata[
+                        "page_number"
+                    ] = chunk.page_number
+
+                    metadata[
+                        "source"
+                    ] = source
+
+                    metadata[
+                        "source_path"
+                    ] = source_path
+
+                    metadata[
+                        "modality"
+                    ] = (
+                        chunk.modality
+                        or "text"
+                    )
+
                     validated.append(
                         TextChunk(
-                            chunk_id=chunk.get("chunk_id", f"{filename}_chunk_{idx}"),
+                            chunk_id=chunk_id,
+                            page_number=chunk.page_number,
                             text=text,
-                            page_number=page_num,
-                            source=chunk.get("source", filename),
-                            source_path=chunk.get("source_path", ""),
-                            modality=chunk.get("modality", "text"),
-                            metadata=meta,
+                            source=source,
+                            source_path=source_path,
+                            modality="text",
+                            metadata=metadata,
                         )
                     )
-            except Exception as err:
-                logger.warning(f"Skipping malformed text chunk at index {idx}: {err}")
+
+                elif isinstance(
+                    chunk,
+                    dict,
+                ):
+
+                    text = (
+                        chunk.get(
+                            "text",
+                            chunk.get(
+                                "content",
+                                "",
+                            ),
+                        )
+                        or ""
+                    ).strip()
+
+                    if not text:
+                        continue
+
+                    page_number = chunk.get(
+                        "page_number",
+                        chunk.get(
+                            "page",
+                            1,
+                        ),
+                    )
+
+                    metadata = dict(
+                        chunk.get(
+                            "metadata",
+                            {},
+                        )
+                        or {}
+                    )
+
+                    chunk_id = (
+                        chunk.get(
+                            "chunk_id"
+                        )
+                        or metadata.get(
+                            "chunk_id"
+                        )
+                        or f"{filename}_chunk_{idx}"
+                    )
+
+                    source = (
+                        chunk.get(
+                            "source"
+                        )
+                        or metadata.get(
+                            "source"
+                        )
+                        or filename
+                    )
+
+                    source_path = (
+                        chunk.get(
+                            "source_path"
+                        )
+                        or metadata.get(
+                            "source_path"
+                        )
+                        or ""
+                    )
+
+                    metadata[
+                        "document_id"
+                    ] = document_id
+
+                    metadata[
+                        "chunk_id"
+                    ] = chunk_id
+
+                    metadata[
+                        "page_number"
+                    ] = page_number
+
+                    metadata[
+                        "source"
+                    ] = source
+
+                    metadata[
+                        "source_path"
+                    ] = source_path
+
+                    metadata[
+                        "modality"
+                    ] = "text"
+
+                    validated.append(
+                        TextChunk(
+                            chunk_id=chunk_id,
+                            page_number=page_number,
+                            text=text,
+                            source=source,
+                            source_path=source_path,
+                            modality="text",
+                            metadata=metadata,
+                        )
+                    )
+
+            except Exception as exc:
+
+                logger.warning(
+                    "Skipping malformed text chunk %s: %s",
+                    idx,
+                    exc,
+                )
+
         return validated
+
+    # ========================================================
+    # IMAGE VALIDATION
+    # ========================================================
 
     def _validate_images(
-        self, raw_images: List[Any], filename: str
+        self,
+        raw_images: List[Any],
+        filename: str,
+        document_id: str,
     ) -> List[ExtractedImage]:
-        """Converts raw dictionaries/objects
-        safely into typified
-        ExtractedImage Pydantic models."""
+
         validated = []
-        for idx, img in enumerate(raw_images):
+
+        for idx, image in enumerate(
+            raw_images
+        ):
+
             try:
-                if isinstance(img, ExtractedImage):
-                    if img.image_path:
-                        validated.append(img)
-                elif isinstance(img, dict):
-                    page_num = img.get("page_number", img.get("page", 1))
-                    image_path = img.get("image_path", "")
-                    if not image_path:
+
+                if isinstance(
+                    image,
+                    ExtractedImage,
+                ):
+
+                    if not image.image_path:
                         continue
-                    validated.append(
-                        ExtractedImage(
-                            page_number=page_num,
-                            image_path=image_path,
-                            dimensions=tuple(img.get("dimensions", (0, 0))),
-                            caption=img.get("caption", None),
-                            image_bytes=img.get("image_bytes", None),
+
+                    image_id = (
+                        image.image_id
+                        or str(
+                            __import__(
+                                "uuid"
+                            ).uuid4()
                         )
                     )
-            except Exception as err:
-                logger.warning(f"Skipping malformed image object at index {idx}: {err}")
+
+                    validated.append(
+                        ExtractedImage(
+                            image_id=image_id,
+                            document_id=document_id,
+                            page_number=image.page_number,
+                            image_path=image.image_path,
+                            source=(
+                                image.source
+                                or filename
+                            ),
+                            source_path=(
+                                image.source_path
+                                or ""
+                            ),
+                            dimensions=image.dimensions,
+                            caption=image.caption,
+                            image_bytes=image.image_bytes,
+                            modality="image",
+                        )
+                    )
+
+                elif isinstance(
+                    image,
+                    dict,
+                ):
+
+                    image_path = (
+                        image.get(
+                            "image_path",
+                            "",
+                        )
+                        or ""
+                    )
+
+                    if not image_path:
+                        continue
+
+                    page_number = image.get(
+                        "page_number",
+                        image.get(
+                            "page",
+                            1,
+                        ),
+                    )
+
+                    image_id = (
+                        image.get(
+                            "image_id"
+                        )
+                        or str(
+                            __import__(
+                                "uuid"
+                            ).uuid4()
+                        )
+                    )
+
+                    source = (
+                        image.get(
+                            "source"
+                        )
+                        or filename
+                    )
+
+                    source_path = (
+                        image.get(
+                            "source_path"
+                        )
+                        or ""
+                    )
+
+                    dimensions = tuple(
+                        image.get(
+                            "dimensions",
+                            (0, 0),
+                        )
+                    )
+
+                    validated.append(
+                        ExtractedImage(
+                            image_id=str(
+                                image_id
+                            ),
+                            document_id=document_id,
+                            page_number=page_number,
+                            image_path=image_path,
+                            source=source,
+                            source_path=source_path,
+                            dimensions=dimensions,
+                            caption=image.get(
+                                "caption"
+                            ),
+                            image_bytes=image.get(
+                                "image_bytes"
+                            ),
+                            modality="image",
+                        )
+                    )
+
+            except Exception as exc:
+
+                logger.warning(
+                    "Skipping malformed image %s: %s",
+                    idx,
+                    exc,
+                )
+
         return validated
 
-    @time_execution("Vector Store Indexing Stage")
+    # ========================================================
+    # QDRANT INDEXING
+    # ========================================================
+
+    @time_execution(
+        "Vector Store Indexing Stage"
+    )
     def _persist_to_vector_store(
-        self, text_chunks: List[TextChunk], images: List[ExtractedImage]
+        self,
+        text_chunks: List[TextChunk],
+        images: List[ExtractedImage],
     ) -> str:
-        warnings: List[str] = []
+
+        warnings = []
 
         try:
+
             if text_chunks:
-                index_text_chunks(text_chunks)
+
+                index_text_chunks(
+                    text_chunks
+                )
+
         except Exception as exc:
-            logger.error("Text vector store indexing failed: %s", exc)
-            warnings.append(f"Text vector store indexing failed: {exc}")
+
+            logger.error(
+                "Text vector store indexing failed: %s",
+                exc,
+            )
+
+            warnings.append(
+                f"Text vector store indexing failed: {exc}"
+            )
 
         try:
-            if images:
-                index_image_vectors(images)
-        except Exception as exc:
-            logger.error("Image vector store indexing failed: %s", exc)
-            warnings.append(f"Image vector store indexing failed: {exc}")
 
-        return "; ".join(warnings)
+            if images:
+
+                index_image_vectors(
+                    images
+                )
+
+        except Exception as exc:
+
+            logger.error(
+                "Image vector store indexing failed: %s",
+                exc,
+            )
+
+            warnings.append(
+                f"Image vector store indexing failed: {exc}"
+            )
+
+        return "; ".join(
+            warnings
+        )
