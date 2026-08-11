@@ -15,17 +15,28 @@ class ExtractedTextPage(BaseModel):
 # 2. Om's (Vision Eng) output structure
 class ExtractedImage(BaseModel):
     page_number: int = Field(
-        ..., description="The 1-indexed page number where the image was extracted"
+        ...,
+        description="The 1-indexed page number where the image was extracted"
     )
     image_path: str = Field(
-        ..., description="Local path where the extracted image is temporarily stored"
+        ...,
+        description="Local path where the extracted image is temporarily stored"
     )
-    dimensions: Tuple[int, int] = Field(..., description="(width, height) of the image")
+    dimensions: Tuple[int, int] = Field(
+        ...,
+        description="(width, height) of the image"
+    )
+    bbox: Optional[List[float]] = Field(
+        default=None,
+        description="Bounding box coordinates [x, y, width, height] of the extracted image"
+    )
     caption: Optional[str] = Field(
-        default=None, description="Extracted figure caption or description"
+        default=None,
+        description="Extracted figure caption or description"
     )
     image_bytes: Optional[bytes] = Field(
-        default=None, description="Raw binary image data"
+        default=None,
+        description="Raw binary image data"
     )
 
 
