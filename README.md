@@ -118,3 +118,151 @@ Database folder inside service now contains connection.py,postgress.y and sqlite
 
 - The codebase targets Python 3.11 to keep the dependency set consistent across machines.
 - The backend can start and respond even when Gemini credentials are missing; the generator falls back to a safe message instead of failing during import.
+
+## 🐙 Git Branching Architecture & Workflow Protocols
+
+To maintain codebase stability and prevent merge conflicts, all team members must adhere to the following Git standards.
+
+### 🌿 1. Branch Strategy
+
+```
+  main          ──[ Production Releases Only ]──────────────────────────►
+                   ▲
+  develop       ───┼──[ Daily Team Integration Branch ]─────────────────►
+                   │          ▲                    ▲
+  feature/*     ───┴──────────┴─[ Individual Developer Feature Branches ]
+```
+
+- **`main`**: Production-ready release branch. Directly locked.
+- **`develop`**: Main team integration branch. All features are merged here via Pull Requests.
+- **`feature/<feature-name>`**: Isolated developer workspace (e.g., `feature/vlm-reasoner`, `feature/sql-agent`).
+
+---
+
+### 🔄 2. Standard Daily Development Workflow
+
+#### Step A: Start New Work
+Always branch off the latest `develop`:
+```bash
+git checkout develop
+git pull origin develop
+git checkout -b feature/your-feature-name
+```
+
+#### Step B: Commit Changes
+Write clear, scoped commit messages using conventional prefixes:
+```bash
+git add .
+git commit -m "feat(vision): add VLM chart numerical parser"
+```
+> **Commit Prefixes**: `feat:` (new feature), `fix:` (bug fix), `docs:` (documentation), `test:` (tests), `refactor:` (code cleanup), `build:` (dependencies/docker).
+
+#### Step C: Push & Open Pull Request
+Push your feature branch and open a Pull Request (PR) into `develop`:
+```bash
+git push -u origin feature/your-feature-name
+```
+
+---
+
+### 🛠️ 3. Scenario-Based Troubleshooting Runbook
+
+#### 📍 Scenario 1: You have uncommitted local work and need to pull remote changes
+**Goal**: Safely pull `origin/develop` without losing your uncommitted edits.
+
+- **Approach A (Commit first - Recommended)**:
+  ```bash
+  git add .
+  git commit -m "wip: save local progress"
+  git pull origin develop --no-rebase
+  git push origin develop
+  ```
+- **Approach B (Stash temporary work)**:
+  ```bash
+  git stash                              # Save uncommitted work to stash
+  git pull origin develop                 # Fetch remote updates
+  git stash pop                          # Re-apply your uncommitted work
+  ```
+
+---
+
+#### 📍 Scenario 2: Pre-Commit Hooks Abort Your Commit (`black` / `flake8` / `isort` failures)
+**Cause**: Code formatting or line length violations triggered by `.pre-commit-config.yaml`.
+
+- **Fix Steps**:
+  1. Inspect pre-commit errors (e.g., `line too long` or `reformatted file`).
+  2. If files were reformatted by `black` or `isort`, simply re-stage them:
+     ```bash
+     git add .
+     ```
+  3. Re-run your commit command:
+     ```bash
+     git commit -m "feat(scope): your descriptive commit message"
+     ```
+
+---
+
+#### 📍 Scenario 3: Resolving Merge Conflicts (`<<<<<<< HEAD` vs `>>>>>>> origin/develop`)
+**Cause**: Both you and a teammate edited the same file lines.
+
+- **Fix Steps**:
+  1. Open the conflicting file. Locate conflict markers:
+     ```text
+     <<<<<<< HEAD (Your local changes)
+     model: gpt-4o-mini
+     =======
+     model: gpt-3.5-turbo
+     >>>>>>> origin/develop (Teammate's remote changes)
+     ```
+  2. Keep the correct code block and delete the marker lines (`<<<<<<<`, `=======`, `>>>>>>>`).
+  3. Save the file, stage it, and complete the merge:
+     ```bash
+     git add path/to/resolved_file.py
+     git commit -m "fix: resolve merge conflict in resolved_file.py"
+     ```
+
+---
+
+#### 📍 Scenario 4: Updating Your Feature Branch with Latest `develop`
+**Goal**: Keep your long-running feature branch updated with recent team merges.
+
+```bash
+git checkout feature/your-feature-name
+git fetch origin
+git merge origin/develop
+```
+*(Resolve any conflicts if prompted, then test your code locally).*
+
+---
+
+#### 📍 Scenario 5: Made Edits on the Wrong Branch
+**Goal**: Move your uncommitted work from `develop` to a new `feature` branch.
+
+```bash
+git stash                              # Stash your current edits
+git checkout -b feature/correct-branch # Create & switch to target branch
+git stash pop                          # Apply stashed edits to the new branch
+```
+
+---
+
+#### 📍 Scenario 6: Discard Unwanted Local Changes
+- **Discard edits in a single file**:
+  ```bash
+  git checkout -- path/to/file.py
+  ```
+- **Reset all untracked files & local changes back to last commit**:
+  ```bash
+  git reset --hard HEAD
+  git clean -fd
+  ```
+  *(⚠️ Warning: This permanently deletes uncommitted local changes).*
+
+---
+
+### ⛔ Golden Rules for Team Collaboration
+
+1. **NEVER force push (`git push -f`) to `main` or `develop`**.
+2. **Always pull before pushing**: Run `git pull origin develop` before submitting PRs.
+3. **Keep PRs focused**: One feature or bug fix per Pull Request.
+4. **Never commit API Keys or Secret Tokens**: Store credentials strictly inside `.env` (which is listed in `.gitignore`).
