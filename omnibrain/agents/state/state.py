@@ -32,3 +32,6 @@ class AgentState(TypedDict, total=False):
     # Text-to-SQL
     sql_query: str | None
     sql_result: Any
+
+    # Structured Citations [Day 4 Scope]
+    citations: List[dict]

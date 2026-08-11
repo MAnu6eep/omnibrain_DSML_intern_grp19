@@ -266,3 +266,27 @@ git stash pop                          # Apply stashed edits to the new branch
 2. **Always pull before pushing**: Run `git pull origin develop` before submitting PRs.
 3. **Keep PRs focused**: One feature or bug fix per Pull Request.
 4. **Never commit API Keys or Secret Tokens**: Store credentials strictly inside `.env` (which is listed in `.gitignore`).
+
+
+Case 1: You have NO uncommitted changes on develop
+If your git status is clean, simply run:
+
+git checkout develop
+git pull origin develop
+
+
+🟡 Case 2: You HAVE uncommitted local changes on develop
+If you have edited files locally that are not yet committed:
+
+Option A: Commit your local work first (Recommended)
+
+git add .
+git commit -m "docs: update README with git operations guide"
+git pull origin develop --no-rebase
+git push origin develop
+
+Option B: Temporary Stash (If you don't want to commit yet)
+
+git stash                              # Temporarily hide uncommitted work
+git pull origin develop                # Pull latest team updates
+git stash pop                          # Re-apply your local edits

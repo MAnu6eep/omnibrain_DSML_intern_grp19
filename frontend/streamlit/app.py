@@ -288,6 +288,37 @@ if user_query := st.chat_input("Ask a question about the document or architectur
                                 f"Extracted Asset: {os.path.basename(img_path)}",
                             )
 
+                # Render Interactive Claims & Citations Explorer [Day 4 Scope]
+                citations_data = data.get("citations", [])
+                if citations_data:
+                    with st.expander(
+                        "📌 Interactive Claims & Citations Explorer (Click-to-View)",
+                        expanded=True,
+                    ):
+                        st.caption(
+                            "Verified AI claims linked directly to "
+                            "PDF pages and chart assets:"
+                        )
+                        for cite in citations_data:
+                            claim = cite.get("claim", "")
+                            src_pdf = cite.get("source_pdf", "Document")
+                            page_num = cite.get("page", 0)
+                            chart_id = cite.get("chart_id")
+
+                            c_col1, c_col2 = st.columns([3, 1])
+                            with c_col1:
+                                st.markdown(f"• **{claim}**")
+                            with c_col2:
+                                badge_label = (
+                                    f"📊 {chart_id}"
+                                    if chart_id
+                                    else f"📄 Page {page_num}"
+                                )
+                                st.info(
+                                    f"{badge_label}\n`{src_pdf}`",
+                                    icon="📌",
+                                )
+
                 if retrieved_text:
                     with st.expander(
                         "📄 Retrieved Context & Origin Badges", expanded=False
@@ -344,5 +375,6 @@ if user_query := st.chat_input("Ask a question about the document or architectur
                 "content": final_answer,
                 "thought_process": thought_steps,
                 "images": returned_images,
+                "citations": data.get("citations", []) if "data" in locals() else [],
             }
         )

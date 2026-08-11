@@ -5,7 +5,9 @@ import time
 from fastapi import APIRouter, HTTPException
 from langchain_core.messages import HumanMessage
 from pydantic import BaseModel, Field
+
 from omnibrain.app.core.guardrails import check_input, check_output
+
 try:
     from langfuse.callback import CallbackHandler as LangfuseCallbackHandler
 except ImportError:
@@ -111,9 +113,7 @@ def _clean_image_results(results):
         cleaned.append(
             RetrievedImage(
                 image_path=image_path,
-                page_number=int(
-                    item.get("page_number", 0) or 0
-                ),
+                page_number=int(item.get("page_number", 0) or 0),
                 caption=item.get("caption"),
                 score=float(item.get("score", 0.0) or 0.0),
                 source=item.get("source", ""),
@@ -151,19 +151,14 @@ async def chat(request: ChatRequest):
     # ------------------------------
 
     if not await check_input(request.message):
-        logger.warning(
-            "Chat request blocked by input guardrail"
-        )
+        logger.warning("Chat request blocked by input guardrail")
 
         raise HTTPException(
             status_code=422,
             detail={
                 "status": "error",
                 "code": "GUARDRAIL_INPUT_REJECTED",
-                "message": (
-                    "Request was rejected by OmniBrain "
-                    "safety guardrails."
-                ),
+                "message": ("Request was rejected by OmniBrain " "safety guardrails."),
             },
         )
     try:
@@ -180,21 +175,13 @@ async def chat(request: ChatRequest):
         result = None
 
         callbacks = _get_langfuse_callbacks()
-        invoke_config = (
-            {"callbacks": callbacks}
-            if callbacks
-            else None
-        )
+        invoke_config = {"callbacks": callbacks} if callbacks else None
 
         for attempt in range(MAX_RETRIES + 1):
             try:
                 result = graph_app.invoke(
                     {
-                        "messages": [
-                            HumanMessage(
-                                content=request.message
-                            )
-                        ],
+                        "messages": [HumanMessage(content=request.message)],
                         "source_name": request.source_name,
                         "top_k": request.top_k,
                     },
@@ -210,10 +197,7 @@ async def chat(request: ChatRequest):
                 rag_logs.append(
                     {
                         "agent": "Self-RAG",
-                        "action": (
-                            f"Attempt {attempt + 1} failed. "
-                            "Retrying..."
-                        ),
+                        "action": (f"Attempt {attempt + 1} failed. " "Retrying..."),
                     }
                 )
 
@@ -236,10 +220,7 @@ async def chat(request: ChatRequest):
                 [
                     {
                         "agent": "Self-RAG",
-                        "action": (
-                            "Initial search returned "
-                            "no relevant chunks."
-                        ),
+                        "action": ("Initial search returned " "no relevant chunks."),
                     },
                     {
                         "agent": "Self-RAG",
@@ -256,10 +237,7 @@ async def chat(request: ChatRequest):
             rag_logs.append(
                 {
                     "agent": "Self-RAG",
-                    "action": (
-                        f"Retrieved {len(retrieved)} "
-                        "relevant chunks."
-                    ),
+                    "action": (f"Retrieved {len(retrieved)} " "relevant chunks."),
                 }
             )
 
@@ -288,13 +266,11 @@ async def chat(request: ChatRequest):
                 "No response generated.",
             )
             # ------------------------------
-    # NeMo Guardrails - Output Check
-    # ------------------------------
+        # NeMo Guardrails - Output Check
+        # ------------------------------
 
         if not await check_output(final_response):
-                logger.warning(
-                "Generated response blocked by output guardrail"
-        )
+            logger.warning("Generated response blocked by output guardrail")
 
         raise HTTPException(
             status_code=400,
@@ -302,28 +278,18 @@ async def chat(request: ChatRequest):
                 "status": "error",
                 "code": "GUARDRAIL_OUTPUT_REJECTED",
                 "message": (
-                    "Generated response was rejected by "
-                    "OmniBrain output guardrails."
+                    "Generated response was rejected by " "OmniBrain output guardrails."
                 ),
             },
         )
-        retrieved_imgs = _clean_image_results(
-            result.get("retrieved_images", [])
-        )
+        retrieved_imgs = _clean_image_results(result.get("retrieved_images", []))
 
-        image_paths = [
-            img.image_path
-            for img in retrieved_imgs
-            if img.image_path
-        ]
+        image_paths = [img.image_path for img in retrieved_imgs if img.image_path]
 
-        execution_time = (
-            time.perf_counter() - start_time
-        )
+        execution_time = time.perf_counter() - start_time
 
         logger.info(
-            "Chat request completed successfully "
-            "in %.3f seconds",
+            "Chat request completed successfully " "in %.3f seconds",
             execution_time,
         )
 
@@ -331,16 +297,12 @@ async def chat(request: ChatRequest):
             response=final_response,
             thought_process=[
                 ThoughtStep(**step)
-                for step in (
-                    rag_logs
-                    + result.get("thought_process", [])
-                )
+                for step in (rag_logs + result.get("thought_process", []))
             ],
             images=image_paths,
-            retrieved_text=_clean_text_results(
-                result.get("retrieved_text", [])
-            ),
+            retrieved_text=_clean_text_results(result.get("retrieved_text", [])),
             retrieved_images=retrieved_imgs,
+            citations=result.get("citations", []),
             status="completed",
         )
 
@@ -348,9 +310,7 @@ async def chat(request: ChatRequest):
         raise
 
     except Exception as e:
-        execution_time = (
-            time.perf_counter() - start_time
-        )
+        execution_time = time.perf_counter() - start_time
 
         logger.exception(
             "Chat pipeline failed after %.3f seconds: %s",
@@ -360,10 +320,7 @@ async def chat(request: ChatRequest):
 
         raise HTTPException(
             status_code=500,
-            detail=(
-                "Chat pipeline failed after multiple "
-                "retry attempts."
-            ),
+            detail=("Chat pipeline failed after multiple " "retry attempts."),
         )
 
 
@@ -391,9 +348,7 @@ async def chat_sql(request: SQLChatRequest):
 
     sql_query = f"-- Generated SQL for: {query}"
 
-    logger.info(
-        "SQL chat request completed successfully"
-    )
+    logger.info("SQL chat request completed successfully")
 
     return SQLChatResponse(
         sql_query=sql_query,
