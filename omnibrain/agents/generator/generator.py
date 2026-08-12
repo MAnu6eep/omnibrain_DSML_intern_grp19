@@ -6,6 +6,7 @@ from typing import Any, Dict
 from langchain_core.messages import AIMessage, HumanMessage
 
 from omnibrain.agents.state.state import AgentState
+from omnibrain.agents.prompts.prompts import SYNTHESIZER_PROMPT
 
 
 def _clean_text_results(results: list[dict]) -> list[dict]:
@@ -149,18 +150,16 @@ def generator_node(state: AgentState) -> Dict[str, Any]:
     context = "\n\n".join(context_lines).strip()
 
     prompt_text = f"""
-You are OmniBrain.
+    {SYNTHESIZER_PROMPT}
 
-Answer the user's question using the relevant retrieved context below.
+    Retrieved Context:
 
-Retrieved Context:
+    {context}
 
-{context}
+    User Question:
 
-User Question:
-
-{user_query}
-"""
+    {user_query}
+    """
 
     message_content = [{"type": "text", "text": prompt_text}]
 

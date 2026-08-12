@@ -294,6 +294,10 @@ def blocked_guardrail_node(state: AgentState):
 workflow.add_node("blocked_guardrail", blocked_guardrail_node)
 
 workflow.add_edge("sql_agent", "generator")
+workflow.add_edge("text_agent", "generator")
+workflow.add_edge("sql_agent", "generator")
+workflow.add_edge("vision_agent", "generator")
+workflow.add_edge("web_agent", "generator")
 
 
 workflow.add_edge("vision_agent", "generator")
