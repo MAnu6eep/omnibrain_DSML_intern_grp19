@@ -6,6 +6,7 @@ from typing import Any, Dict
 from langchain_core.messages import AIMessage, HumanMessage
 
 from omnibrain.agents.state.state import AgentState
+from omnibrain.agents.prompts.prompts import SYNTHESIZER_PROMPT
 
 
 def _clean_text_results(results: list[dict]) -> list[dict]:
@@ -111,29 +112,54 @@ def generator_node(state: AgentState) -> Dict[str, Any]:
             else ""
         )
         caption = img.get("caption", "") if isinstance(img, dict) else ""
-        image_path = img.get("image_path", "") if isinstance(img, dict) else ""
 
         src = source or "Unknown"
         cap = caption or "No caption available."
+        chart_type = img.get("chart_type", "")
+        title = img.get("title", "")
+        summary = img.get("summary", "")
+
+        values = img.get("values", [])
+
+        value_lines = []
+
+        for item in values:
+            value_lines.append(f"{item.get('label', '')} = {item.get('value', '')}")
+
         context_lines.append(
-            f"[Image | Source: {src} | Page: {page} | Path: {image_path}] {cap}"
+            f"""
+        [Vision | Source: {src} | Page: {page}]
+
+        Caption:
+        {cap}
+
+        Chart Type:
+        {chart_type}
+
+        Title:
+        {title}
+
+        Extracted Values:
+        {chr(10).join(value_lines)}
+
+        Summary:
+        {summary}
+        """.strip()
         )
 
     context = "\n\n".join(context_lines).strip()
 
     prompt_text = f"""
-You are OmniBrain.
+    {SYNTHESIZER_PROMPT}
 
-Answer the user's question using the relevant retrieved context below.
+    Retrieved Context:
 
-Retrieved Context:
+    {context}
 
-{context}
+    User Question:
 
-User Question:
-
-{user_query}
-"""
+    {user_query}
+    """
 
     message_content = [{"type": "text", "text": prompt_text}]
 
@@ -172,12 +198,58 @@ User Question:
         answer = f"Retrieved Context Summary:\n{context}"
         provider_used = "Local Context Fallback"
 
+    # Build Structured Citations Payloads [Day 4 Scope]
+    citations = []
+    for doc in retrieved_text:
+        doc_text = doc.get("text", "") if isinstance(doc, dict) else str(doc)
+        claim_snippet = (doc_text[:110] + "...") if len(doc_text) > 110 else doc_text
+        src = (
+            doc.get("source", doc.get("document", "Unknown"))
+            if isinstance(doc, dict)
+            else "Unknown"
+        )
+        pg = doc.get("page", doc.get("page_number", 0)) if isinstance(doc, dict) else 0
+        citations.append(
+            {
+                "claim": claim_snippet,
+                "source_pdf": str(src),
+                "page": int(pg or 0),
+                "chart_id": None,
+            }
+        )
+
+    for img in retrieved_images:
+        cap = (
+            img.get("caption", "Referenced Visual Diagram")
+            if isinstance(img, dict)
+            else "Referenced Visual Diagram"
+        )
+        src = img.get("source", "Unknown") if isinstance(img, dict) else "Unknown"
+        pg = img.get("page_number", 0) if isinstance(img, dict) else 0
+        img_id = img.get("image_id") or (
+            os.path.basename(img.get("image_path", ""))
+            if isinstance(img, dict)
+            else None
+        )
+        citations.append(
+            {
+                "claim": f"[Figure]: {cap}",
+                "source_pdf": str(src),
+                "page": int(pg or 0),
+                "chart_id": img_id,
+            }
+        )
+
     thought = {
         "agent": "Generator",
-        "action": f"Synthesized final response using {provider_used}.",
+        "action": (
+            f"Synthesized response using {provider_used} with "
+            f"{len(citations)} structured citations."
+        ),
     }
 
     return {
         "messages": [AIMessage(content=answer)],
         "thought_process": [thought],
+        "citations": citations,
     }

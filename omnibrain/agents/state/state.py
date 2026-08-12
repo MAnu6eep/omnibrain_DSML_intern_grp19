@@ -20,7 +20,7 @@ class AgentState(TypedDict, total=False):
     thought_process: Annotated[List[dict], operator.add]
 
     # Self-RAG Evaluation
-    retrieval_relevance_score: float
+    retrieval_relevance_score: str | float | None
     retry_count: int
 
     # Task 2: Re-query loop tracking
@@ -32,3 +32,6 @@ class AgentState(TypedDict, total=False):
     # Text-to-SQL
     sql_query: str | None
     sql_result: Any
+
+    # Structured Citations [Day 4 Scope]
+    citations: List[dict]

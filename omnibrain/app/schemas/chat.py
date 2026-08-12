@@ -36,11 +36,18 @@ class RetrievedImage(BaseModel):
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
 
+class CitationPayload(BaseModel):
+    claim: str
+    source_pdf: str = ""
+    page: int = 0
+    chart_id: Optional[str] = None
+
+
 class ChatResponse(BaseModel):
     response: str
     thought_process: List[ThoughtStep]
     images: List[str] = Field(default_factory=list)
     retrieved_text: List[RetrievedTextChunk] = Field(default_factory=list)
     retrieved_images: List[RetrievedImage] = Field(default_factory=list)
+    citations: List[CitationPayload] = Field(default_factory=list)
     status: str = "completed"
-

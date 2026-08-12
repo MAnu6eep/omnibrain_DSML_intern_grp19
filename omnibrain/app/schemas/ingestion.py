@@ -1,13 +1,12 @@
+import uuid
 from typing import Any, Dict, List, Optional, Tuple
-from uuid import uuid4
 
 from pydantic import BaseModel, Field
 
 
 # ============================================================
-# 1. Charan's (PDF Eng) output structure
+# 1. PDF Text Page Structure
 # ============================================================
-
 class ExtractedTextPage(BaseModel):
     page_number: int = Field(
         ...,
@@ -24,21 +23,17 @@ class ExtractedTextPage(BaseModel):
 
 
 # ============================================================
-# 2. Om's (Vision Eng) output structure
+# 2. Om & Meerja Vision Engine Output Structure (Combined)
 # ============================================================
-
 class ExtractedImage(BaseModel):
-    # Citation / identification metadata
     image_id: str = Field(
-        default_factory=lambda: str(uuid4()),
+        default_factory=lambda: str(uuid.uuid4()),
         description="Unique identifier for the extracted image",
     )
     document_id: str = Field(
         default="",
         description="Unique identifier of the source document",
     )
-
-    # Page and image information
     page_number: int = Field(
         ...,
         description="The 1-indexed page number where the image was extracted",
@@ -51,8 +46,10 @@ class ExtractedImage(BaseModel):
         ...,
         description="(width, height) of the image",
     )
-
-    # Citation source metadata
+    bbox: Optional[List[float]] = Field(
+        default=None,
+        description="Bounding box coordinates [x, y, width, height]",
+    )
     source: str = Field(
         default="",
         description="Original source file name",
@@ -61,8 +58,6 @@ class ExtractedImage(BaseModel):
         default="",
         description="Original source file path",
     )
-
-    # Image metadata
     caption: Optional[str] = Field(
         default=None,
         description="Extracted figure caption or description",
@@ -78,9 +73,8 @@ class ExtractedImage(BaseModel):
 
 
 # ============================================================
-# 3. Structural chunk output after text splitting
+# 3. Structural Text Chunk
 # ============================================================
-
 class TextChunk(BaseModel):
     chunk_id: str = Field(
         ...,
@@ -113,9 +107,8 @@ class TextChunk(BaseModel):
 
 
 # ============================================================
-# 4. Manav's (Backend Eng) API Response contract
+# 4. API Response Contracts
 # ============================================================
-
 class IngestionResponse(BaseModel):
     task_id: str
     status: str = "processing"

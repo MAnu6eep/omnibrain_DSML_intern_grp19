@@ -150,20 +150,39 @@ def run_vision_vlm_check():
     messages = result.get("messages", [])
     response_text = messages[-1].content if messages else ""
 
+    expected_labels = ["Q1", "Q2", "Q3"]
+    expected_values = ["150", "280", "420"]
+
+    label_matches = sum(label in response_text for label in expected_labels)
+    value_matches = sum(value in response_text for value in expected_values)
+
+    label_accuracy = (label_matches / len(expected_labels)) * 100
+    value_accuracy = (value_matches / len(expected_values)) * 100
+    overall_accuracy = (label_accuracy + value_accuracy) / 2
+
     print("\n--- VLM RESPONSE & NUMERICAL EXTRACTION OUTPUT ---")
     print(response_text)
     print("---------------------------------------------------\n")
 
     # Check if numerical data or quarters are present
-    has_numbers = any(
-        num in response_text for num in ["150", "280", "420", "Q1", "Q2", "Q3"]
-    )
-    if has_numbers:
-        print(
-            "✅ VLM Vision Check Passed: Numerical data and bar metrics accurately extracted from chart."
-        )
+    print("Expected Labels :", expected_labels)
+    print("Expected Values :", expected_values)
+
+    print()
+
+    print(f"Detected Labels : {label_matches}/{len(expected_labels)}")
+    print(f"Detected Values : {value_matches}/{len(expected_values)}")
+
+    print()
+
+    print(f"Label Accuracy  : {label_accuracy:.1f}%")
+    print(f"Value Accuracy  : {value_accuracy:.1f}%")
+    print(f"Overall Accuracy: {overall_accuracy:.1f}%")
+
+    if overall_accuracy == 100:
+        print("\n✅ Vision Check PASSED")
     else:
-        print("⚠️ VLM Vision Check Note: Response generated.")
+        print("\n⚠️ Vision Check completed with partial accuracy.")
 
     return True
 
