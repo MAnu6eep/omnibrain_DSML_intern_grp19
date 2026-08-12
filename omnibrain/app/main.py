@@ -6,11 +6,13 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.routing import APIRoute
+
 from omnibrain.app.api.routes.pdf import router as pdf_router
 from omnibrain.app.api.routes.chat import router as chat_router
 from omnibrain.app.api.routes.ingestion import router as ingestion_router
 from omnibrain.app.core.constants import APP_NAME, APP_VERSION
 from omnibrain.app.core.logging import logger
+
 
 load_dotenv()
 
@@ -22,7 +24,20 @@ print("=" * 80)
 
 def create_app() -> FastAPI:
     app = FastAPI(
+        title=APP_NAME,
+        version=APP_VERSION,
+        description=(
+            "OmniBrain backend API for document ingestion, "
+            "PDF processing, retrieval, and chat."
+        ),
+        docs_url="/docs",
+        redoc_url="/redoc",
+        openapi_url="/openapi.json",
     )
+
+    # -------------------------
+    # CORS Middleware
+    # -------------------------
 
     app.add_middleware(
         CORSMiddleware,
@@ -31,19 +46,36 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
-    app.mount(
-    "/static/pdf_images",
-    StaticFiles(directory="static/pdf_images"),
-    name="pdf_images",
-)
+
+    # -------------------------
+    # Static Assets
+    # -------------------------
 
     app.mount(
-    "/static/pdfs",
-    StaticFiles(directory="static/pdfs"),
-    name="pdfs",
+        "/static/pdf_images",
+        StaticFiles(directory="static/pdf_images"),
+        name="pdf_images",
     )
 
-    @app.get("/")
+    app.mount(
+        "/static/pdfs",
+        StaticFiles(directory="static/pdfs"),
+        name="pdfs",
+    )
+
+    # -------------------------
+    # System Routes
+    # -------------------------
+
+    @app.get(
+        "/",
+        tags=["System"],
+        summary="Backend status",
+        description=(
+            "Returns the current OmniBrain backend status "
+            "and UTC timestamp."
+        ),
+    )
     async def root():
         return {
             "status": "success",
@@ -51,7 +83,14 @@ def create_app() -> FastAPI:
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
-    @app.get("/health", tags=["health"])
+    @app.get(
+        "/health",
+        tags=["System"],
+        summary="Health check",
+        description=(
+            "Checks whether the OmniBrain backend is operational."
+        ),
+    )
     async def health():
         return {"status": "ok"}
 
@@ -70,15 +109,26 @@ def create_app() -> FastAPI:
         prefix="/api/v1/chat",
         tags=["Chat"],
     )
+
     app.include_router(
-    pdf_router,
-    prefix="/api/v1/pdf",
-    tags=["PDF"],
+        pdf_router,
+        prefix="/api/v1/pdf",
+        tags=["PDF"],
     )
+
+    # -------------------------
+    # Route Logging
+    # -------------------------
 
     logger.info(
         "Registered %s routes",
-        len([route for route in app.routes if isinstance(route, APIRoute)]),
+        len(
+            [
+                route
+                for route in app.routes
+                if isinstance(route, APIRoute)
+            ]
+        ),
     )
 
     return app
