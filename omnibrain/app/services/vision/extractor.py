@@ -1,14 +1,15 @@
 import hashlib
 from pathlib import Path
 from typing import Any, Dict, List
+from uuid import uuid4
 
 import fitz
 
 
 def find_caption(page, image_rect, max_distance=50):
-    """Finds the nearest text block immediately below an image."""
-    blocks = page.get_text("dict")["blocks"]
+    """Find the nearest probable figure caption below an image."""
 
+    blocks = page.get_text("dict")["blocks"]
     caption = None
     best_distance = float("inf")
 
@@ -32,7 +33,9 @@ def find_caption(page, image_rect, max_distance=50):
 
         for line in block["lines"]:
             spans = [
-                span["text"].strip() for span in line["spans"] if span["text"].strip()
+                span["text"].strip()
+                for span in line["spans"]
+                if span["text"].strip()
             ]
 
             if spans:
@@ -40,7 +43,7 @@ def find_caption(page, image_rect, max_distance=50):
 
         text = " ".join(lines).strip()
 
-        # Accept only probable figure captions
+        # Accept probable figure/table captions
         if text.startswith(("Fig.", "Figure", "Table")):
             if distance < best_distance:
                 caption = text
@@ -50,109 +53,114 @@ def find_caption(page, image_rect, max_distance=50):
 
 
 def extract_images(
-    pdf_path: str, output_dir: str = "output/images"
+    pdf_path: str,
+    output_dir: str = "output/images",
 ) -> List[Dict[str, Any]]:
-    """Extract embedded images from a PDF document and save them to output_dir.
-
-    Args:
-        pdf_path: Path to the PDF document.
-        output_dir: Directory where extracted images will be stored.
-
-    Returns:
-        List of dictionaries containing extracted image metadata matching
-        ExtractedImage schema requirements.
     """
+    Extract embedded images from a PDF and save them to output_dir.
+
+    Combines SHA256 duplicate detection, bounding boxes [x, y, w, h],
+    and metadata required by Qdrant citation tracking.
+    """
+
     pdf_file = Path(pdf_path)
 
     if not pdf_file.exists():
-        raise FileNotFoundError(f"PDF not found: {pdf_path}")
+        raise FileNotFoundError(f"PDF file not found: {pdf_path}")
 
     output_path = Path(output_dir)
-    output_path.mkdir(parents=True, exist_ok=True)
+    output_path.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
 
-    extracted_images = []
+    extracted_images: List[Dict[str, Any]] = []
     seen_hashes = set()
 
-    pdf = fitz.open(pdf_file)
+    # Stable document identifier based on the PDF path
+    document_hash = hashlib.sha256(
+        str(pdf_file.resolve()).encode("utf-8")
+    ).hexdigest()[:16]
+    document_id = f"doc_{document_hash}"
 
-    try:
-        for page_number in range(len(pdf)):
-            page = pdf.load_page(page_number)
-            images = page.get_images(full=True)
+    with fitz.open(pdf_path) as document:
 
-            for image_index, image in enumerate(images, start=1):
-                xref = image[0]
+        for page_index in range(len(document)):
+            page = document[page_index]
+            page_number = page_index + 1
+            image_list = page.get_images(full=True)
 
+            for image_index, image_info in enumerate(
+                image_list,
+                start=1,
+            ):
                 try:
-                    base_image = pdf.extract_image(xref)
-                except Exception:
-                    continue
+                    xref = image_info[0]
+                    image_data = document.extract_image(xref)
 
-                image_bytes = base_image["image"]
-                image_extension = base_image["ext"]
-                width = base_image.get("width", 0)
-                height = base_image.get("height", 0)
+                    if not image_data:
+                        continue
 
-                # SHA256 hash for duplicate detection
-                image_hash = hashlib.sha256(image_bytes).hexdigest()
+                    image_bytes = image_data["image"]
+                    image_ext = image_data.get("ext", "png")
 
-                if image_hash in seen_hashes:
-                    continue
+                    # SHA256 hash for duplicate detection
+                    image_hash = hashlib.sha256(image_bytes).hexdigest()
+                    if image_hash in seen_hashes:
+                        continue
+                    seen_hashes.add(image_hash)
 
-                seen_hashes.add(image_hash)
+                    image_id = str(uuid4())
+                    image_filename = (
+                        f"page_{page_number}_image_{image_index}.{image_ext}"
+                    )
+                    image_file = output_path / image_filename
+                    image_file.write_bytes(image_bytes)
 
-                # Locate image on page for caption matching
-                rects = page.get_image_rects(xref)
-                image_rect = rects[0] if rects else None
-                caption = find_caption(page, image_rect) if image_rect else None
+                    # Bounding box & caption extraction
+                    image_rect = None
+                    try:
+                        rects = page.get_image_rects(xref)
+                        if rects:
+                            image_rect = rects[0]
+                    except Exception:
+                        image_rect = None
 
-                # Write file to disk
-                filename = (
-                    f"page_{page_number + 1}_image_{image_index}.{image_extension}"
-                )
-                file_path = output_path / filename
+                    caption = None
+                    bbox = None
 
-                with open(file_path, "wb") as file:
-                    file.write(image_bytes)
+                    if image_rect is not None:
+                        caption = find_caption(page, image_rect)
+                        bbox = [
+                            float(image_rect.x0),
+                            float(image_rect.y0),
+                            float(image_rect.width),
+                            float(image_rect.height),
+                        ]
 
-                bbox = None
+                    width = image_data.get("width", 0)
+                    height = image_data.get("height", 0)
 
-                if image_rect:
-                    bbox = [
-                        float(image_rect.x0),
-                        float(image_rect.y0),
-                        float(image_rect.width),
-                        float(image_rect.height),
-                    ]
+                    extracted_images.append(
+                        {
+                            "image_id": image_id,
+                            "document_id": document_id,
+                            "page_number": page_number,
+                            "image_path": str(image_file),
+                            "dimensions": (int(width), int(height)),
+                            "bbox": bbox,
+                            "source": pdf_file.name,
+                            "source_path": str(pdf_file.resolve()),
+                            "caption": caption,
+                            "image_bytes": None,
+                            "modality": "image",
+                        }
+                    )
 
-                extracted_images.append(
-                    {
-                        "page_number": page_number + 1,
-                        "image_path": str(file_path),
-                        "dimensions": (width, height),
-                        "bbox": (
-                            [
-                                image_rect.x0,
-                                image_rect.y0,
-                                image_rect.width,
-                                image_rect.height,
-                            ]
-                        if image_rect
-                        else None
-                        ),
-                        "caption": caption,
-                        "image_bytes": image_bytes,
-                    }
-                )
-
-    finally:
-        pdf.close()
+                except Exception as exc:
+                    print(
+                        f"Failed to extract image from page {page_number}, "
+                        f"image {image_index}: {exc}"
+                    )
 
     return extracted_images
-
-
-def extract_images_from_pdf(
-    pdf_path: str, output_dir: str = "output/images"
-) -> List[Dict[str, Any]]:
-    """Standardized image extraction interface wrapper."""
-    return extract_images(pdf_path, output_dir=output_dir)

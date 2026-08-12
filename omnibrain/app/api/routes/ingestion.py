@@ -1,13 +1,13 @@
+import io
 import os
 import tempfile
 import uuid
 from pathlib import Path
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, File, HTTPException, Response, UploadFile
 
 from omnibrain.app.schemas.ingestion import UploadResponse
 from omnibrain.app.services.ingestion.ingestion_service import IngestionService
-
 
 STATIC_PDF_DIR = Path("static/pdfs")
 STATIC_PDF_DIR.mkdir(parents=True, exist_ok=True)
@@ -30,7 +30,6 @@ def _upload_response(upload_id: str, job: dict) -> UploadResponse:
 
 @router.post("/upload", response_model=UploadResponse)
 async def upload_pdf(file: UploadFile = File(...)):
-
     filename = file.filename or "uploaded.pdf"
     file_suffix = Path(filename).suffix.lower()
 
@@ -47,11 +46,7 @@ async def upload_pdf(file: UploadFile = File(...)):
         )
 
     upload_id = str(uuid.uuid4())
-
-    STATIC_PDF_DIR.mkdir(parents=True, exist_ok=True)
-
     permanent_pdf_path = STATIC_PDF_DIR / f"{upload_id}.pdf"
-
     temp_path = None
 
     job_store[upload_id] = {
@@ -72,12 +67,11 @@ async def upload_pdf(file: UploadFile = File(...)):
                 detail="Uploaded PDF is empty.",
             )
 
-        # Permanently store PDF for static serving
-        # and PDF page rendering.
+        # Permanently store PDF for static serving and citation rendering
         with open(permanent_pdf_path, "wb") as pdf_file:
             pdf_file.write(file_bytes)
 
-        # Temporary file for the ingestion pipeline.
+        # Temporary file for the ingestion pipeline
         with tempfile.NamedTemporaryFile(
             delete=False,
             suffix=".pdf",
@@ -86,7 +80,6 @@ async def upload_pdf(file: UploadFile = File(...)):
             temp_path = temp.name
 
         service = IngestionService()
-
         result = service.process_pdf(
             temp_path,
             source_filename=filename,
@@ -111,19 +104,14 @@ async def upload_pdf(file: UploadFile = File(...)):
 
     except Exception as e:
         job_store[upload_id]["status"] = "failed"
-        job_store[upload_id]["message"] = (
-            f"Processing failed: {str(e)}"
-        )
+        job_store[upload_id]["message"] = f"Processing failed: {str(e)}"
         job_store[upload_id]["warnings"] = [str(e)]
-
         raise HTTPException(
             status_code=500,
             detail=f"Processing failed: {str(e)}",
         )
 
     finally:
-        # Only delete the temporary processing file.
-        # The permanent PDF in static/pdfs is retained.
         if temp_path and os.path.exists(temp_path):
             os.remove(temp_path)
 
@@ -133,7 +121,6 @@ async def upload_pdf(file: UploadFile = File(...)):
     response_model=UploadResponse,
 )
 async def get_upload_status(upload_id: str):
-
     if upload_id not in job_store:
         raise HTTPException(
             status_code=404,
@@ -144,3 +131,44 @@ async def get_upload_status(upload_id: str):
         upload_id,
         job_store[upload_id],
     )
+
+
+@router.get("/pdf/page/{pdf_id}/{page_num}")
+async def get_pdf_page_render(pdf_id: str, page_num: int):
+    """
+    Renders and returns a single PDF page as a PNG image [Manav Day 4 Scope].
+    """
+    pdf_path = STATIC_PDF_DIR / f"{pdf_id}.pdf"
+    if not pdf_path.exists():
+        data_pdf = Path("data") / pdf_id
+        if data_pdf.exists():
+            pdf_path = data_pdf
+        else:
+            raise HTTPException(
+                status_code=404,
+                detail=f"PDF '{pdf_id}' not found.",
+            )
+
+    try:
+        import fitz  # PyMuPDF
+
+        doc = fitz.open(pdf_path)
+        if page_num < 1 or page_num > len(doc):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Page {page_num} out of bounds for PDF (Total pages: {len(doc)}).",
+            )
+
+        page = doc.load_page(page_num - 1)
+        pix = page.get_pixmap(dpi=150)
+        img_bytes = pix.tobytes("png")
+        doc.close()
+
+        return Response(content=img_bytes, media_type="image/png")
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to render PDF page: {str(exc)}",
+        )
