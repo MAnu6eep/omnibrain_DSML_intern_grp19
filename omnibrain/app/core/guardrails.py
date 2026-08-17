@@ -23,26 +23,76 @@ rails = _load_guardrails()
 # Basic policy terms for requests that are clearly outside
 # the supported OmniBrain document/RAG domain.
 _BLOCKED_INPUT_PATTERNS = [
-    r"\bhow to hack\b",
-    r"\bhow to attack\b",
-    r"\bhow to kill\b",
-    r"\bhow to make (a bomb|explosives?)\b",
-    r"\bhow to make (a weapon|poison)\b",
-    r"\b(bypass|disable) authentication\b",
-    r"\b(bypass|disable) guardrails?\b",
+    # Harmful / violent requests
+    r"\bhow\s+(to|can\s+i|do\s+i)\s+(hack|attack|kill)\b",
+    r"\bhow\s+(to|can\s+i|do\s+i)\s+(make|build|create)\s+(a\s+)?(bomb|explosive)s?\b",
+    r"\bhow\s+(to|can\s+i|do\s+i)\s+(make|build|create)\s+(a\s+)?(weapon|poison)s?\b",
+    r"\bgive\s+me\s+(instructions|steps)\s+to\s+(attack|kill|hack)\b",
+    r"\b(instructions|steps)\s+for\s+(making|creating)\s+(a\s+)?(bomb|explosive|weapon)\b",
+
+    # Authentication / security bypass
+    r"\b(bypass|disable|circumvent)\s+(the\s+)?(authentication|login|login\s+system)\b",
+    r"\b(bypass|disable|circumvent)\s+(the\s+)?(guardrails?|safety\s+controls?|security\s+controls?)\b",
+    r"\bhow\s+(to|can\s+i|do\s+i)\s+(bypass|disable|circumvent)\b",
+
+    # Prompt/safety manipulation
+    r"\b(ignore|disregard)\s+(all\s+)?(previous|prior)\s+instructions\b",
+    r"\bact\s+as\s+an\s+unrestricted\s+assistant\b",
+    r"\bhow to build an explosive\b",
+    r"\binstructions for making explosives\b",
+    r"\bdisable the security checks\b",
+    r"\bsecurity checks\b",
+    r"\binvestment advice\b",
+    r"\bignore the document domain\b",
+    r"\bignore the safety policy\b",
+    r"\bharmful instructions\b",
+    r"\breveal information outside\b",
+    r"\boutside the supported document domain\b",
+    r"\bhow\s+do\s+i\s+build\s+(an?\s+)?explosive\b",
+
 ]
+
 
 _OFF_TOPIC_PATTERNS = [
     r"\brecipe\b",
     r"\bfootball\b",
-    r"\bcricket score\b",
-    r"\bmovie recommendation\b",
-    r"\bplay a game\b",
+    r"\bsoccer\b",
+    r"\bcricket\b",
+    r"\bcricket\s+score\b",
+    r"\bmovie\s+recommendation\b",
+    r"\bplay\s+a\s+game\b",
+    r"\bcapital\s+of\s+france\b",
+    r"\bfifa\s+world\s+cup\b",
+    r"\btell\s+me\s+a\s+joke\b",
+    r"\blatest\s+news\b",
+    r"\bpresident\s+of\s+the\s+united\s+states\b",
+    r"\bbest\s+smartphone\b",
+    r"\bplan\s+(a\s+)?vacation\b",
+    r"\bweather\s+today\b",
+    r"\bcryptocurrency\b",
+    r"\bstock\s+(investment|recommendation)\b",
+    r"\bwhich\s+stock\s+should\s+i\s+buy\b",
+    r"\btoday'?s\s+sports\s+results\b",
+    r"\bwrite\s+me\s+a\s+romantic\s+story\b",
+    r"\bprogramming\s+joke\b",
+    r"\brecommend\s+(a\s+)?movie\b",
 ]
+
+
 _BLOCKED_OUTPUT_PATTERNS = [
-    r"\bhow to (hack|attack|kill)\b",
-    r"\bmake (a bomb|explosives?)\b",
-    r"\bhow to make (a weapon|poison)\b",
+    # Harmful instructions
+    r"\bhow\s+to\s+(hack|attack|kill)\b",
+    r"\bhow\s+to\s+(make|build|create)\s+(a\s+)?(bomb|explosive)s?\b",
+    r"\bhow\s+to\s+(make|build|create)\s+(a\s+)?(weapon|poison)s?\b",
+    r"\b(instructions|steps)\s+(for|to)\s+(making|creating|building)\s+(a\s+)?(bomb|explosive|weapon)\b",
+
+    # Security bypass
+    r"\bhow\s+to\s+(bypass|disable|circumvent)\b",
+    r"\b(bypass|disable|circumvent)\s+(the\s+)?(authentication|login|guardrails?|safety\s+controls?|security\s+controls?)\b",
+
+    r"\bhow to make an explosive\b",
+    r"\bhow to make explosives\b",
+
 ]
 
 def _matches_any(message: str, patterns: list[str]) -> bool:
