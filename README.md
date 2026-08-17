@@ -290,3 +290,5 @@ Option B: Temporary Stash (If you don't want to commit yet)
 git stash                              # Temporarily hide uncommitted work
 git pull origin develop                # Pull latest team updates
 git stash pop                          # Re-apply your local edits
+Current status:
+Upload the pdf in get pdf checkpoint and get a upload it by this u can access your pdf in browser and also can go to specific pages by typing the page number in checkpoint.
