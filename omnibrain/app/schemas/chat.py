@@ -50,4 +50,6 @@ class ChatResponse(BaseModel):
     retrieved_text: List[RetrievedTextChunk] = Field(default_factory=list)
     retrieved_images: List[RetrievedImage] = Field(default_factory=list)
     citations: List[CitationPayload] = Field(default_factory=list)
+    sql_query: Optional[str] = None
+    sql_result: Optional[List[Dict[str, Any]]] = None
     status: str = "completed"

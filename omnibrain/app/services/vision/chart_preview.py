@@ -16,7 +16,13 @@ def verify_bbox(
     if not bbox or len(bbox) != 4:
         return False
 
-    x, y, width, height = bbox
+    try:
+        x = float(bbox[0])
+        y = float(bbox[1])
+        width = float(bbox[2])
+        height = float(bbox[3])
+    except (ValueError, TypeError):
+        return False
 
     if width <= 0 or height <= 0:
         return False
@@ -159,16 +165,10 @@ def build_chart_preview_list(
     previews = []
 
     for index, image_metadata in enumerate(extracted_images):
-        vlm_result = (
-            vlm_results[index]
-            if index < len(vlm_results)
-            else None
-        )
+        vlm_result = vlm_results[index] if index < len(vlm_results) else None
 
         cropped_path = (
-            cropped_image_paths[index]
-            if index < len(cropped_image_paths)
-            else None
+            cropped_image_paths[index] if index < len(cropped_image_paths) else None
         )
 
         previews.append(

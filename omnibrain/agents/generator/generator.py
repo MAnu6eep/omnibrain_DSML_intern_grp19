@@ -5,8 +5,8 @@ from typing import Any, Dict
 
 from langchain_core.messages import AIMessage, HumanMessage
 
-from omnibrain.agents.state.state import AgentState
 from omnibrain.agents.prompts.prompts import SYNTHESIZER_PROMPT
+from omnibrain.agents.state.state import AgentState
 
 
 def _clean_text_results(results: list[dict]) -> list[dict]:
@@ -68,7 +68,19 @@ def generator_node(state: AgentState) -> Dict[str, Any]:
             user_query = str(last_msg)
 
     retrieved_text = _clean_text_results(state.get("retrieved_text", []))
-    retrieved_images = _clean_image_results(state.get("retrieved_images", []))
+
+    # Only preserve images if the query was processed by Vision Agent
+    is_vision_query = any(
+        "vision_agent" in str(step.get("action", "")).lower()
+        or "vision agent" in str(step.get("agent", "")).lower()
+        for step in state.get("thought_process", [])
+    )
+
+    retrieved_images = (
+        _clean_image_results(state.get("retrieved_images", []))
+        if is_vision_query
+        else []
+    )
 
     # -------------------------
     # Build context

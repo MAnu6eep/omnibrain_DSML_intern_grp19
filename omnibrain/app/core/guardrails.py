@@ -2,7 +2,14 @@ import logging
 import re
 from pathlib import Path
 
-from nemoguardrails import LLMRails, RailsConfig
+try:
+    from nemoguardrails import LLMRails, RailsConfig
+
+    NEMO_AVAILABLE = True
+except ImportError:
+    NEMO_AVAILABLE = False
+    LLMRails = None
+    RailsConfig = None
 
 
 BASE_DIR = Path(__file__).resolve().parents[3]
@@ -12,11 +19,21 @@ logger = logging.getLogger(__name__)
 
 
 def _load_guardrails():
-    config = RailsConfig.from_path(str(GUARDRAILS_DIR))
-    return LLMRails(config)
+    if not NEMO_AVAILABLE:
+        logger.warning(
+            "nemoguardrails package not installed. "
+            "Using regex pattern guardrails fallback."
+        )
+        return None
+    try:
+        if GUARDRAILS_DIR.exists():
+            config = RailsConfig.from_path(str(GUARDRAILS_DIR))
+            return LLMRails(config)
+    except Exception as exc:
+        logger.warning("Failed to initialize NeMo Guardrails: %s", exc)
+    return None
 
 
-# Validate that the NeMo Guardrails configuration can be loaded.
 rails = _load_guardrails()
 
 
@@ -28,13 +45,14 @@ _BLOCKED_INPUT_PATTERNS = [
     r"\bhow\s+(to|can\s+i|do\s+i)\s+(make|build|create)\s+(a\s+)?(bomb|explosive)s?\b",
     r"\bhow\s+(to|can\s+i|do\s+i)\s+(make|build|create)\s+(a\s+)?(weapon|poison)s?\b",
     r"\bgive\s+me\s+(instructions|steps)\s+to\s+(attack|kill|hack)\b",
-    r"\b(instructions|steps)\s+for\s+(making|creating)\s+(a\s+)?(bomb|explosive|weapon)\b",
-
+    r"\b(instructions|steps)\s+for\s+(making|creating)\s+"
+    r"(a\s+)?(bomb|explosive|weapon)\b",
     # Authentication / security bypass
-    r"\b(bypass|disable|circumvent)\s+(the\s+)?(authentication|login|login\s+system)\b",
-    r"\b(bypass|disable|circumvent)\s+(the\s+)?(guardrails?|safety\s+controls?|security\s+controls?)\b",
+    r"\b(bypass|disable|circumvent)\s+(the\s+)?"
+    r"(authentication|login|login\s+system)\b",
+    r"\b(bypass|disable|circumvent)\s+(the\s+)?"
+    r"(guardrails?|safety\s+controls?|security\s+controls?)\b",
     r"\bhow\s+(to|can\s+i|do\s+i)\s+(bypass|disable|circumvent)\b",
-
     # Prompt/safety manipulation
     r"\b(ignore|disregard)\s+(all\s+)?(previous|prior)\s+instructions\b",
     r"\bact\s+as\s+an\s+unrestricted\s+assistant\b",
@@ -49,7 +67,6 @@ _BLOCKED_INPUT_PATTERNS = [
     r"\breveal information outside\b",
     r"\boutside the supported document domain\b",
     r"\bhow\s+do\s+i\s+build\s+(an?\s+)?explosive\b",
-
 ]
 
 
@@ -84,24 +101,21 @@ _BLOCKED_OUTPUT_PATTERNS = [
     r"\bhow\s+to\s+(hack|attack|kill)\b",
     r"\bhow\s+to\s+(make|build|create)\s+(a\s+)?(bomb|explosive)s?\b",
     r"\bhow\s+to\s+(make|build|create)\s+(a\s+)?(weapon|poison)s?\b",
-    r"\b(instructions|steps)\s+(for|to)\s+(making|creating|building)\s+(a\s+)?(bomb|explosive|weapon)\b",
-
+    r"\b(instructions|steps)\s+(for|to)\s+(making|creating|building)\s+"
+    r"(a\s+)?(bomb|explosive|weapon)\b",
     # Security bypass
     r"\bhow\s+to\s+(bypass|disable|circumvent)\b",
-    r"\b(bypass|disable|circumvent)\s+(the\s+)?(authentication|login|guardrails?|safety\s+controls?|security\s+controls?)\b",
-
+    r"\b(bypass|disable|circumvent)\s+(the\s+)?"
+    r"(authentication|login|guardrails?|safety\s+controls?|security\s+controls?)\b",
     r"\bhow to make an explosive\b",
     r"\bhow to make explosives\b",
-
 ]
+
 
 def _matches_any(message: str, patterns: list[str]) -> bool:
     text = message.lower().strip()
 
-    return any(
-        re.search(pattern, text)
-        for pattern in patterns
-    )
+    return any(re.search(pattern, text) for pattern in patterns)
 
 
 async def check_input(message: str) -> bool:
@@ -117,20 +131,14 @@ async def check_input(message: str) -> bool:
         return False
 
     if _matches_any(message, _BLOCKED_INPUT_PATTERNS):
-        logger.warning(
-            "Input guardrail blocked unsafe request"
-        )
+        logger.warning("Input guardrail blocked unsafe request")
         return False
 
     if _matches_any(message, _OFF_TOPIC_PATTERNS):
-        logger.warning(
-            "Input guardrail blocked off-topic request"
-        )
+        logger.warning("Input guardrail blocked off-topic request")
         return False
 
-    logger.info(
-        "Input guardrail passed"
-    )
+    logger.info("Input guardrail passed")
 
     return True
 

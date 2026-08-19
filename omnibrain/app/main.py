@@ -3,16 +3,15 @@ from datetime import datetime, timezone
 
 from dotenv import load_dotenv
 from fastapi import FastAPI
-from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.routing import APIRoute
+from fastapi.staticfiles import StaticFiles
 
-from omnibrain.app.api.routes.pdf import router as pdf_router
 from omnibrain.app.api.routes.chat import router as chat_router
 from omnibrain.app.api.routes.ingestion import router as ingestion_router
+from omnibrain.app.api.routes.pdf import router as pdf_router
 from omnibrain.app.core.constants import APP_NAME, APP_VERSION
 from omnibrain.app.core.logging import logger
-
 
 load_dotenv()
 
@@ -46,10 +45,13 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
-
     # -------------------------
     # Static Assets
     # -------------------------
+    from pathlib import Path
+
+    Path("static/pdf_images").mkdir(parents=True, exist_ok=True)
+    Path("static/pdfs").mkdir(parents=True, exist_ok=True)
 
     app.mount(
         "/static/pdf_images",
@@ -72,8 +74,7 @@ def create_app() -> FastAPI:
         tags=["System"],
         summary="Backend status",
         description=(
-            "Returns the current OmniBrain backend status "
-            "and UTC timestamp."
+            "Returns the current OmniBrain backend status " "and UTC timestamp."
         ),
     )
     async def root():
@@ -87,9 +88,7 @@ def create_app() -> FastAPI:
         "/health",
         tags=["System"],
         summary="Health check",
-        description=(
-            "Checks whether the OmniBrain backend is operational."
-        ),
+        description=("Checks whether the OmniBrain backend is operational."),
     )
     async def health():
         return {"status": "ok"}
@@ -122,13 +121,7 @@ def create_app() -> FastAPI:
 
     logger.info(
         "Registered %s routes",
-        len(
-            [
-                route
-                for route in app.routes
-                if isinstance(route, APIRoute)
-            ]
-        ),
+        len([route for route in app.routes if isinstance(route, APIRoute)]),
     )
 
     return app

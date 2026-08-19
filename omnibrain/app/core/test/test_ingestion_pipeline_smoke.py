@@ -7,7 +7,7 @@ def test_ingestion_pipeline_smoke(monkeypatch, tmp_path):
 
     monkeypatch.setattr(
         "omnibrain.app.services.ingestion.ingestion_service.extract_text_and_chunk",
-        lambda file_path: [
+        lambda file_path, source_filename=None: [
             {
                 "chunk_id": "sample_p1_c0",
                 "text": "hello world",

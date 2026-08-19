@@ -11,6 +11,8 @@ class AgentState(TypedDict, total=False):
 
     # Graph routing
     next_node: str | None
+    source_name: str | None
+    document_id: str | None
 
     # Retrieved context
     retrieved_text: List[dict]

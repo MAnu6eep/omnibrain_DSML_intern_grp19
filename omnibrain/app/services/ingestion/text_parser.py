@@ -6,12 +6,18 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 
 def extract_text_and_chunk(
-    pdf_path: str, chunk_size: int = 500, chunk_overlap: int = 50
+    pdf_path: str,
+    chunk_size: int = 500,
+    chunk_overlap: int = 50,
+    source_filename: str | None = None,
 ) -> List[Dict[str, Any]]:
     """Extract page text from a PDF and return chunk dictionaries with metadata."""
     pdf_file = Path(pdf_path)
     if not pdf_file.exists():
         raise FileNotFoundError(f"PDF file not found: {pdf_path}")
+
+    display_filename = source_filename or pdf_file.name
+    display_stem = Path(display_filename).stem
 
     doc = fitz.open(pdf_file)
     splitter = RecursiveCharacterTextSplitter(
@@ -32,17 +38,17 @@ def extract_text_and_chunk(
             page_chunks = splitter.split_text(page_text)
 
             for chunk_index, chunk_text in enumerate(page_chunks):
-                chunk_id = f"{pdf_file.stem}_p{page_num + 1}_c{chunk_index}"
+                chunk_id = f"{display_stem}_p{page_num + 1}_c{chunk_index}"
 
                 chunks.append(
                     {
                         "chunk_id": chunk_id,
                         "text": chunk_text.strip(),
                         "page_number": page_num + 1,
-                        "source": pdf_file.name,
+                        "source": display_filename,
                         "source_path": str(pdf_file),
                         "metadata": {
-                            "source": pdf_file.name,
+                            "source": display_filename,
                             "source_path": str(pdf_file),
                             "page_number": page_num + 1,
                             "chunk_index": chunk_index,

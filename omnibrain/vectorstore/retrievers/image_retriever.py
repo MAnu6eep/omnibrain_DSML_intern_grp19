@@ -36,26 +36,32 @@ def get_client():
 
 def search_images(query: str, top_k: int = 3) -> List[Dict]:
     """
-    Searches the Qdrant image collection using a
-    CLIP text embedding.
-
-    Args:
-        query:
-            Search query.
-
-        top_k:
-            Number of results.
-
-    Returns:
-        List of image metadata dictionaries.
+    Searches the Qdrant image collection using a CLIP text embedding.
+    Differentiates between general multi-image requests vs specific single-figure queries.
     """
 
     if not query or not query.strip():
         return []
 
     processor, model = get_clip_components()
-
     client = get_client()
+
+    # Detect if user query targets a specific figure or page
+    query_lower = query.lower()
+    is_general_all_request = any(
+        phrase in query_lower
+        for phrase in [
+            "show all",
+            "all images",
+            "all figures",
+            "all diagrams",
+            "list images",
+            "list figures",
+            "every image",
+        ]
+    )
+
+    limit = 6 if is_general_all_request else 2
 
     inputs = processor(text=[query], return_tensors="pt", padding=True)
 
@@ -64,7 +70,6 @@ def search_images(query: str, top_k: int = 3) -> List[Dict]:
             input_ids=inputs["input_ids"], attention_mask=inputs["attention_mask"]
         )
 
-    # Handle different Transformers versions safely
     if hasattr(outputs, "text_embeds"):
         embedding = outputs.text_embeds
     elif hasattr(outputs, "pooler_output"):
@@ -75,7 +80,7 @@ def search_images(query: str, top_k: int = 3) -> List[Dict]:
     embedding = embedding.squeeze().cpu().numpy().tolist()
 
     results = client.query_points(
-        collection_name=IMAGE_COLLECTION, query=embedding, limit=max(top_k * 5, 20)
+        collection_name=IMAGE_COLLECTION, query=embedding, limit=limit * 3
     )
 
     images = []
@@ -100,6 +105,7 @@ def search_images(query: str, top_k: int = 3) -> List[Dict]:
                 "caption": payload.get("caption"),
                 "source": payload.get("source", ""),
                 "modality": payload.get("modality", "image"),
+                "score": float(hit.score if hasattr(hit, "score") else 0.0),
                 "metadata": {
                     key: value
                     for key, value in payload.items()
@@ -114,6 +120,9 @@ def search_images(query: str, top_k: int = 3) -> List[Dict]:
                 },
             }
         )
+
+        if len(images) >= limit:
+            break
 
     return images
 

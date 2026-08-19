@@ -34,7 +34,8 @@ async def upload_pdf(file: UploadFile = File(...)):
     file_suffix = Path(filename).suffix.lower()
 
     if (
-        file.content_type not in {
+        file.content_type
+        not in {
             "application/pdf",
             "application/octet-stream",
         }
@@ -171,4 +172,46 @@ async def get_pdf_page_render(pdf_id: str, page_num: int):
         raise HTTPException(
             status_code=500,
             detail=f"Failed to render PDF page: {str(exc)}",
+        )
+
+
+@router.post("/purge")
+async def purge_vector_store():
+    """
+    User-Authorized Purge: Permanently deletes all indexed text and image vectors from Qdrant.
+    """
+    try:
+        from omnibrain.vectorstore.collections import purge_collections
+        from omnibrain.vectorstore.qdrant_client import QdrantClientWrapper
+
+        client = QdrantClientWrapper().client()
+        purge_collections(client)
+
+        return {
+            "status": "success",
+            "message": "Vector database collections purged and re-initialized successfully.",
+        }
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to purge vector database: {str(exc)}",
+        )
+
+
+@router.get("/documents")
+async def get_indexed_documents_endpoint():
+    """
+    Returns a list of all unique PDF document names currently indexed in Qdrant.
+    """
+    try:
+        from omnibrain.vectorstore.retrievers.text_retriever import (
+            get_indexed_documents,
+        )
+
+        docs = get_indexed_documents()
+        return {"documents": docs}
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to retrieve indexed documents: {str(exc)}",
         )

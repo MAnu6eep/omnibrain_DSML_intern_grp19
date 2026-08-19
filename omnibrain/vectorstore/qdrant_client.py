@@ -40,4 +40,9 @@ class QdrantClientWrapper:
         if self.api_key:
             kwargs["api_key"] = self.api_key
 
-        return QdrantClient(**kwargs)
+        try:
+            client = QdrantClient(**kwargs)
+            client.get_collections()
+            return client
+        except Exception:
+            return QdrantClient(path="./qdrant_db")

@@ -45,3 +45,22 @@ def create_collections(client: QdrantClient) -> None:
         print(f"Collection already exists: {IMAGE_COLLECTION}")
 
     print("Qdrant collections initialized successfully.")
+
+
+def purge_collections(client: QdrantClient) -> None:
+    """
+    Deletes and re-initializes text and image collections in Qdrant.
+    """
+    existing_collections = {
+        collection.name for collection in client.get_collections().collections
+    }
+
+    if TEXT_COLLECTION in existing_collections:
+        client.delete_collection(collection_name=TEXT_COLLECTION)
+        print(f"Deleted collection: {TEXT_COLLECTION}")
+
+    if IMAGE_COLLECTION in existing_collections:
+        client.delete_collection(collection_name=IMAGE_COLLECTION)
+        print(f"Deleted collection: {IMAGE_COLLECTION}")
+
+    create_collections(client)

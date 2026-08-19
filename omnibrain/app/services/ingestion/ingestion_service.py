@@ -1,20 +1,10 @@
 import os
 import time
-
 from pathlib import Path
 from typing import Any, Dict, List
 
-from omnibrain.app.core.logging import (
-    logger,
-    time_execution,
-)
-
-from omnibrain.app.schemas.ingestion import (
-    ExtractedImage,
-    IngestionResponse,
-    TextChunk,
-)
-
+from omnibrain.app.core.logging import logger, time_execution
+from omnibrain.app.schemas.ingestion import ExtractedImage, IngestionResponse, TextChunk
 
 # ============================================================
 # TEXT EXTRACTION
@@ -22,17 +12,13 @@ from omnibrain.app.schemas.ingestion import (
 
 try:
 
-    from omnibrain.app.services.ingestion.text_parser import (
-        extract_text_and_chunk,
-    )
+    from omnibrain.app.services.ingestion.text_parser import extract_text_and_chunk
 
 except ImportError:
 
     try:
 
-        from scripts.prototypes.pdf_text_proto import (
-            extract_text_and_chunk,
-        )
+        from scripts.prototypes.pdf_text_proto import extract_text_and_chunk
 
     except ImportError:
 
@@ -40,9 +26,7 @@ except ImportError:
             pdf_path: str,
         ) -> List[Dict[str, Any]]:
 
-            logger.warning(
-                "Using fallback text parsing interface"
-            )
+            logger.warning("Using fallback text parsing interface")
 
             return []
 
@@ -61,9 +45,7 @@ except ImportError:
 
     try:
 
-        from omnibrain.app.services.vision.extractor import (
-            extract_images_from_pdf,
-        )
+        from omnibrain.app.services.vision.extractor import extract_images_from_pdf
 
     except ImportError:
 
@@ -72,9 +54,7 @@ except ImportError:
             output_dir: str = "output/images",
         ) -> List[Dict[str, Any]]:
 
-            logger.warning(
-                "Using fallback vision extraction interface"
-            )
+            logger.warning("Using fallback vision extraction interface")
 
             return []
 
@@ -85,9 +65,7 @@ except ImportError:
 
 try:
 
-    from omnibrain.vectorstore.indexers.text_indexer import (
-        index_text_chunks,
-    )
+    from omnibrain.vectorstore.indexers.text_indexer import index_text_chunks
 
 except ImportError:
 
@@ -95,9 +73,7 @@ except ImportError:
         chunks: List[Any],
     ) -> bool:
 
-        logger.warning(
-            "Using fallback text vector store indexer"
-        )
+        logger.warning("Using fallback text vector store indexer")
 
         return True
 
@@ -108,9 +84,7 @@ except ImportError:
 
 try:
 
-    from omnibrain.vectorstore.indexers.image_indexer import (
-        index_image_vectors,
-    )
+    from omnibrain.vectorstore.indexers.image_indexer import index_image_vectors
 
 except ImportError:
 
@@ -118,9 +92,7 @@ except ImportError:
         images: List[Any],
     ) -> bool:
 
-        logger.warning(
-            "Using fallback image vector store indexer"
-        )
+        logger.warning("Using fallback image vector store indexer")
 
         return True
 
@@ -129,21 +101,18 @@ except ImportError:
 # INGESTION SERVICE
 # ============================================================
 
+
 class IngestionService:
 
     def __init__(self):
 
-        logger.info(
-            "Initializing IngestionService Pipeline Orchestrator"
-        )
+        logger.info("Initializing IngestionService Pipeline Orchestrator")
 
     # ========================================================
     # PUBLIC PDF PROCESSOR
     # ========================================================
 
-    @time_execution(
-        "Full Ingestion Pipeline"
-    )
+    @time_execution("Full Ingestion Pipeline")
     def process_pdf(
         self,
         file_path: str,
@@ -166,19 +135,11 @@ class IngestionService:
         source_path: str,
     ) -> IngestionResponse:
 
-        source = Path(
-            source_path
-        )
+        source = Path(source_path)
 
         if source.is_dir():
 
-            pdf_files = sorted(
-                path
-                for path in source.rglob(
-                    "*.pdf"
-                )
-                if path.is_file()
-            )
+            pdf_files = sorted(path for path in source.rglob("*.pdf") if path.is_file())
 
             if not pdf_files:
 
@@ -194,61 +155,35 @@ class IngestionService:
 
             for pdf_file in pdf_files:
 
-                document_id = str(
-                    __import__(
-                        "uuid"
-                    ).uuid4()
-                )
+                document_id = str(__import__("uuid").uuid4())
 
                 result = self._process_single_pdf(
-                    file_path=str(
-                        pdf_file
-                    ),
+                    file_path=str(pdf_file),
                     source_filename=pdf_file.name,
                     document_id=document_id,
                 )
 
-                aggregate_pages += (
-                    result.pages_parsed
-                )
+                aggregate_pages += result.pages_parsed
 
-                aggregate_chunks += (
-                    result.text_chunks
-                )
+                aggregate_chunks += result.text_chunks
 
-                aggregate_images += (
-                    result.images_extracted
-                )
+                aggregate_images += result.images_extracted
 
-                warnings.extend(
-                    result.warnings
-                )
+                warnings.extend(result.warnings)
 
-            status = (
-                "completed"
-                if not warnings
-                else "partial"
-            )
+            status = "completed" if not warnings else "partial"
 
             return IngestionResponse(
-                task_id=(
-                    f"task_{int(time.time())}"
-                ),
+                task_id=(f"task_{int(time.time())}"),
                 status=status,
-                message=(
-                    "Folder ingestion completed."
-                ),
+                message=("Folder ingestion completed."),
                 pages_parsed=aggregate_pages,
                 text_chunks=aggregate_chunks,
                 images_extracted=aggregate_images,
                 warnings=warnings,
             )
 
-        document_id = str(
-            __import__(
-                "uuid"
-            ).uuid4()
-        )
+        document_id = str(__import__("uuid").uuid4())
 
         return self._process_single_pdf(
             file_path=source_path,
@@ -267,18 +202,11 @@ class IngestionService:
         document_id: str = None,
     ) -> IngestionResponse:
 
-        if not os.path.exists(
-            file_path
-        ):
+        if not os.path.exists(file_path):
 
-            raise FileNotFoundError(
-                f"Source PDF file not found at path: {file_path}"
-            )
+            raise FileNotFoundError(f"Source PDF file not found at path: {file_path}")
 
-        filename = (
-            source_filename
-            or Path(file_path).name
-        )
+        filename = source_filename or Path(file_path).name
 
         logger.info(
             "Starting ingestion workflow for file: %s",
@@ -286,23 +214,8 @@ class IngestionService:
         )
 
         if not document_id:
-
-            logger.warning(
-                "No document_id provided. "
-                "Generating one automatically."
-            )
-
-            document_id = str(
-                __import__(
-                    "uuid"
-                ).uuid4()
-            )
-
-        logger.info(
-            "Document ID for '%s': %s",
-            filename,
-            document_id,
-        )
+            document_id = filename
+            logger.info("Using PDF filename as document_id: %s", document_id)
 
         warnings = []
 
@@ -310,115 +223,96 @@ class IngestionService:
         # TEXT
         # ====================================================
 
-        raw_chunks = (
-            self._run_text_extraction(
-                file_path,
-                filename,
-            )
+        raw_chunks = self._run_text_extraction(
+            file_path,
+            filename,
         )
 
-        validated_text_chunks = (
-            self._validate_text_chunks(
-                raw_chunks,
-                filename,
-                document_id,
-            )
+        validated_text_chunks = self._validate_text_chunks(
+            raw_chunks,
+            filename,
+            document_id,
         )
 
         if not validated_text_chunks:
 
-            warnings.append(
-                "No text chunks were produced."
-            )
+            warnings.append("No text chunks were produced.")
 
         # ====================================================
         # IMAGES
         # ====================================================
 
-        raw_images = (
-            self._run_vision_extraction(
-                file_path,
-                filename,
-            )
+        raw_images = self._run_vision_extraction(
+            file_path,
+            filename,
         )
 
-        validated_images = (
-            self._validate_images(
-                raw_images,
-                filename,
-                document_id,
-            )
+        validated_images = self._validate_images(
+            raw_images,
+            filename,
+            document_id,
         )
 
         if not validated_images:
 
-            warnings.append(
-                "No embedded images were extracted."
-            )
+            warnings.append("No embedded images were extracted.")
 
         # ====================================================
         # QDRANT
         # ====================================================
 
-        persist_warning = (
-            self._persist_to_vector_store(
-                validated_text_chunks,
-                validated_images,
-            )
+        persist_warning = self._persist_to_vector_store(
+            validated_text_chunks,
+            validated_images,
         )
 
         if persist_warning:
 
-            warnings.append(
-                persist_warning
-            )
+            warnings.append(persist_warning)
 
         # ====================================================
         # PAGE COUNT
         # ====================================================
 
-        pages = [
-            chunk.page_number
-            for chunk in validated_text_chunks
-        ]
+        pages = [chunk.page_number for chunk in validated_text_chunks]
 
-        pages.extend(
-            image.page_number
-            for image in validated_images
-        )
+        pages.extend(image.page_number for image in validated_images)
 
-        total_pages = max(
-            pages + [1]
-        )
+        total_pages = max(pages + [1])
+
+        # Record PDF Document Registry & Chunk Index Metadata Pointers in SQLite DB
+        try:
+            from omnibrain.agents.sql_agent.sql_agent import (
+                record_pdf_ingestion_in_sqlite,
+            )
+
+            record_pdf_ingestion_in_sqlite(
+                filename=filename,
+                document_id=document_id,
+                total_pages=total_pages,
+                text_chunks=validated_text_chunks,
+                images=validated_images,
+            )
+        except Exception as exc:
+            logger.warning("Failed to record PDF metadata in SQLite DB: %s", exc)
 
         # ====================================================
         # RESPONSE
         # ====================================================
 
-        status = (
-            "completed"
-            if not warnings
-            else "partial"
-        )
+        status = "completed" if not warnings else "partial"
 
         return IngestionResponse(
-            task_id=(
-                f"task_{int(time.time())}"
-            ),
+            task_id=(f"task_{int(time.time())}"),
             status=status,
             message=(
                 "PDF multi-modal pipeline successfully executed and indexed."
                 if status == "completed"
-                else
-                "PDF multi-modal pipeline completed with warnings."
+                else "PDF multi-modal pipeline completed with warnings."
             ),
             pages_parsed=total_pages,
-            text_chunks=len(
-                validated_text_chunks
-            ),
-            images_extracted=len(
-                validated_images
-            ),
+            text_chunks=len(validated_text_chunks),
+            images_extracted=len(validated_images),
             warnings=warnings,
         )
 
@@ -426,9 +320,7 @@ class IngestionService:
     # TEXT EXTRACTION
     # ========================================================
 
-    @time_execution(
-        "Text Extraction Stage"
-    )
+    @time_execution("Text Extraction Stage")
     def _run_text_extraction(
         self,
         file_path: str,
@@ -436,9 +328,9 @@ class IngestionService:
     ) -> List[Any]:
 
         try:
-
             return extract_text_and_chunk(
-                file_path
+                file_path,
+                source_filename=filename,
             )
 
         except Exception as exc:
@@ -454,9 +346,7 @@ class IngestionService:
     # IMAGE EXTRACTION
     # ========================================================
 
-    @time_execution(
-        "Vision Extraction Stage"
-    )
+    @time_execution("Vision Extraction Stage")
     def _run_vision_extraction(
         self,
         file_path: str,
@@ -492,9 +382,7 @@ class IngestionService:
 
         validated = []
 
-        for idx, chunk in enumerate(
-            raw_chunks
-        ):
+        for idx, chunk in enumerate(raw_chunks):
 
             try:
 
@@ -503,60 +391,35 @@ class IngestionService:
                     TextChunk,
                 ):
 
-                    text = (
-                        chunk.text
-                        or ""
-                    ).strip()
+                    text = (chunk.text or "").strip()
 
                     if not text:
                         continue
 
-                    metadata = dict(
-                        chunk.metadata
-                        or {}
-                    )
+                    metadata = dict(chunk.metadata or {})
 
-                    chunk_id = (
-                        chunk.chunk_id
-                        or f"{filename}_chunk_{idx}"
-                    )
+                    source = filename
+                    clean_stem = Path(filename).stem
+                    raw_chunk_id = chunk.chunk_id or f"{clean_stem}_chunk_{idx}"
+                    if raw_chunk_id.startswith("tmp") and "_" in raw_chunk_id:
+                        parts = raw_chunk_id.split("_", 1)
+                        chunk_id = f"{clean_stem}_{parts[1]}"
+                    else:
+                        chunk_id = raw_chunk_id
 
-                    source = (
-                        chunk.source
-                        or filename
-                    )
+                    source_path = chunk.source_path or ""
 
-                    source_path = (
-                        chunk.source_path
-                        or ""
-                    )
+                    metadata["document_id"] = document_id
 
-                    metadata[
-                        "document_id"
-                    ] = document_id
+                    metadata["chunk_id"] = chunk_id
 
-                    metadata[
-                        "chunk_id"
-                    ] = chunk_id
+                    metadata["page_number"] = chunk.page_number
 
-                    metadata[
-                        "page_number"
-                    ] = chunk.page_number
+                    metadata["source"] = source
 
-                    metadata[
-                        "source"
-                    ] = source
+                    metadata["source_path"] = source_path
 
-                    metadata[
-                        "source_path"
-                    ] = source_path
-
-                    metadata[
-                        "modality"
-                    ] = (
-                        chunk.modality
-                        or "text"
-                    )
+                    metadata["modality"] = chunk.modality or "text"
 
                     validated.append(
                         TextChunk(
@@ -605,59 +468,34 @@ class IngestionService:
                         or {}
                     )
 
-                    chunk_id = (
-                        chunk.get(
-                            "chunk_id"
-                        )
-                        or metadata.get(
-                            "chunk_id"
-                        )
-                        or f"{filename}_chunk_{idx}"
+                    source = filename
+                    clean_stem = Path(filename).stem
+                    raw_chunk_id = (
+                        chunk.get("chunk_id")
+                        or metadata.get("chunk_id")
+                        or f"{clean_stem}_chunk_{idx}"
                     )
-
-                    source = (
-                        chunk.get(
-                            "source"
-                        )
-                        or metadata.get(
-                            "source"
-                        )
-                        or filename
-                    )
+                    if str(raw_chunk_id).startswith("tmp") and "_" in str(raw_chunk_id):
+                        parts = str(raw_chunk_id).split("_", 1)
+                        chunk_id = f"{clean_stem}_{parts[1]}"
+                    else:
+                        chunk_id = str(raw_chunk_id)
 
                     source_path = (
-                        chunk.get(
-                            "source_path"
-                        )
-                        or metadata.get(
-                            "source_path"
-                        )
-                        or ""
+                        chunk.get("source_path") or metadata.get("source_path") or ""
                     )
 
-                    metadata[
-                        "document_id"
-                    ] = document_id
+                    metadata["document_id"] = document_id
 
-                    metadata[
-                        "chunk_id"
-                    ] = chunk_id
+                    metadata["chunk_id"] = chunk_id
 
-                    metadata[
-                        "page_number"
-                    ] = page_number
+                    metadata["page_number"] = page_number
 
-                    metadata[
-                        "source"
-                    ] = source
+                    metadata["source"] = source
 
-                    metadata[
-                        "source_path"
-                    ] = source_path
+                    metadata["source_path"] = source_path
 
-                    metadata[
-                        "modality"
-                    ] = "text"
+                    metadata["modality"] = "text"
 
                     validated.append(
                         TextChunk(
@@ -694,9 +532,7 @@ class IngestionService:
 
         validated = []
 
-        for idx, image in enumerate(
-            raw_images
-        ):
+        for idx, image in enumerate(raw_images):
 
             try:
 
@@ -708,14 +544,7 @@ class IngestionService:
                     if not image.image_path:
                         continue
 
-                    image_id = (
-                        image.image_id
-                        or str(
-                            __import__(
-                                "uuid"
-                            ).uuid4()
-                        )
-                    )
+                    image_id = image.image_id or str(__import__("uuid").uuid4())
 
                     validated.append(
                         ExtractedImage(
@@ -723,14 +552,8 @@ class IngestionService:
                             document_id=document_id,
                             page_number=image.page_number,
                             image_path=image.image_path,
-                            source=(
-                                image.source
-                                or filename
-                            ),
-                            source_path=(
-                                image.source_path
-                                or ""
-                            ),
+                            source=(image.source or filename),
+                            source_path=(image.source_path or ""),
                             dimensions=image.dimensions,
                             caption=image.caption,
                             image_bytes=image.image_bytes,
@@ -762,30 +585,11 @@ class IngestionService:
                         ),
                     )
 
-                    image_id = (
-                        image.get(
-                            "image_id"
-                        )
-                        or str(
-                            __import__(
-                                "uuid"
-                            ).uuid4()
-                        )
-                    )
+                    image_id = image.get("image_id") or str(__import__("uuid").uuid4())
 
-                    source = (
-                        image.get(
-                            "source"
-                        )
-                        or filename
-                    )
+                    source = image.get("source") or filename
 
-                    source_path = (
-                        image.get(
-                            "source_path"
-                        )
-                        or ""
-                    )
+                    source_path = image.get("source_path") or ""
 
                     dimensions = tuple(
                         image.get(
@@ -796,21 +600,15 @@ class IngestionService:
 
                     validated.append(
                         ExtractedImage(
-                            image_id=str(
-                                image_id
-                            ),
+                            image_id=str(image_id),
                             document_id=document_id,
                             page_number=page_number,
                             image_path=image_path,
                             source=source,
                             source_path=source_path,
                             dimensions=dimensions,
-                            caption=image.get(
-                                "caption"
-                            ),
-                            image_bytes=image.get(
-                                "image_bytes"
-                            ),
+                            caption=image.get("caption"),
+                            image_bytes=image.get("image_bytes"),
                             modality="image",
                         )
                     )
@@ -829,9 +627,7 @@ class IngestionService:
     # QDRANT INDEXING
     # ========================================================
 
-    @time_execution(
-        "Vector Store Indexing Stage"
-    )
+    @time_execution("Vector Store Indexing Stage")
     def _persist_to_vector_store(
         self,
         text_chunks: List[TextChunk],
@@ -844,9 +640,7 @@ class IngestionService:
 
             if text_chunks:
 
-                index_text_chunks(
-                    text_chunks
-                )
+                index_text_chunks(text_chunks)
 
         except Exception as exc:
 
@@ -855,17 +649,13 @@ class IngestionService:
                 exc,
             )
 
-            warnings.append(
-                f"Text vector store indexing failed: {exc}"
-            )
+            warnings.append(f"Text vector store indexing failed: {exc}")
 
         try:
 
             if images:
 
-                index_image_vectors(
-                    images
-                )
+                index_image_vectors(images)
 
         except Exception as exc:
 
@@ -874,10 +664,6 @@ class IngestionService:
                 exc,
             )
 
-            warnings.append(
-                f"Image vector store indexing failed: {exc}"
-            )
+            warnings.append(f"Image vector store indexing failed: {exc}")
 
-        return "; ".join(
-            warnings
-        )
+        return "; ".join(warnings)

@@ -1,20 +1,20 @@
 from dataclasses import dataclass
 
+from omnibrain.agents.tools.web_search import execute_web_search
+
+
 @dataclass
 class SearchAgent:
     name: str = "search_agent"
 
-    def execute(self, state: dict, query: str) -> dict[str, str]:
+    def execute(self, query: str) -> dict:
         """
-        Placeholder Search Agent.
-
-        This agent will later be connected to the web search
-        module for retrieving external information.
+        Executes web search using DuckDuckGo search engine.
         """
-
+        results = execute_web_search(query)
         return {
             "agent": self.name,
             "query": query,
-            "status": "Search request received",
-            "response": "Web search functionality will be integrated here."
+            "status": "completed",
+            "results": results,
         }

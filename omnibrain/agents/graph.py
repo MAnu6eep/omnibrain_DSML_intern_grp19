@@ -56,8 +56,14 @@ def _extract_query(state: AgentState) -> str:
 def text_agent_node(state: AgentState):
 
     query = _extract_query(state)
+    source_name = state.get("source_name")
+    document_id = state.get("document_id")
 
-    results = search_text_chunks(query)
+    results = search_text_chunks(
+        query,
+        source_name=source_name,
+        document_id=document_id,
+    )
 
     print(f"QUERY: {query} -> " f"RETRIEVED {len(results)} CHUNKS FROM QDRANT")
 
@@ -83,8 +89,14 @@ def text_agent_node(state: AgentState):
 def requery_text_agent_node(state: AgentState):
 
     query = state.get("rewritten_query", "")
+    source_name = state.get("source_name")
+    document_id = state.get("document_id")
 
-    results = search_text_chunks(query)
+    results = search_text_chunks(
+        query,
+        source_name=source_name,
+        document_id=document_id,
+    )
 
     score = results[0].get("score", 0) if results else 0
 
@@ -143,15 +155,20 @@ def web_agent_node(state: AgentState):
 
 
 def sql_agent_node(state: AgentState):
-    statement = state["messages"][-1].content
+    statement = _extract_query(state)
 
     result = sql_agent.execute(statement)
 
-    thought = {"agent": "SQL Agent", "action": "Generated SQL query."}
+    thought = {
+        "agent": "SQL Agent",
+        "action": f"Generated SQL Query: {result.get('sql_query', '')}",
+    }
 
     return {
-        "sql_result": result,
-        "next_node": "FINISH",
+        "sql_query": result.get("sql_query", ""),
+        "sql_result": result.get("sql_result", []),
+        "retrieved_text": result.get("retrieved_text", []),
+        "next_node": "generator",
         "thought_process": [thought],
     }
 

@@ -271,17 +271,17 @@ async def chat(request: ChatRequest):
 
         if not await check_output(final_response):
             logger.warning("Generated response blocked by output guardrail")
-
-        raise HTTPException(
-            status_code=400,
-            detail={
-                "status": "error",
-                "code": "GUARDRAIL_OUTPUT_REJECTED",
-                "message": (
-                    "Generated response was rejected by " "OmniBrain output guardrails."
-                ),
-            },
-        )
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "status": "error",
+                    "code": "GUARDRAIL_OUTPUT_REJECTED",
+                    "message": (
+                        "Generated response was rejected by "
+                        "OmniBrain output guardrails."
+                    ),
+                },
+            )
         retrieved_imgs = _clean_image_results(result.get("retrieved_images", []))
 
         image_paths = [img.image_path for img in retrieved_imgs if img.image_path]
@@ -303,6 +303,8 @@ async def chat(request: ChatRequest):
             retrieved_text=_clean_text_results(result.get("retrieved_text", [])),
             retrieved_images=retrieved_imgs,
             citations=result.get("citations", []),
+            sql_query=result.get("sql_query"),
+            sql_result=result.get("sql_result"),
             status="completed",
         )
 
